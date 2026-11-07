@@ -30,6 +30,8 @@
 #include "mftscan/inlining.hpp"
 #include "mftscan/namespace_auditor.hpp"
 #include "mftscan/unallocated_analyzer.hpp"
+#include "mftscan/mft_layout.hpp"
+#include "mftscan/zone_id.hpp"
 #include "mftscan/usn_journal.hpp"
 #include <cstring>
 #include "mftscan/bitmap.hpp"
@@ -1890,6 +1892,76 @@ void test_unallocated_analyzer() {
     check(rep.top_recoverable_files[0].size_bytes == 100000, "top recoverable file size is 100000");
 }
 
+
+void test_zone_identifier_auditor() {
+    check(ZoneIdentifierAuditor::extract_domain_from_url(L"https://github.com/negg0s/mftscan/releases") == L"github.com", "domain github.com");
+    check(ZoneIdentifierAuditor::extract_domain_from_url(L"http://download.sysinternals.com:8080/files/autoruns.zip") == L"download.sysinternals.com", "domain sysinternals");
+    check(ZoneIdentifierAuditor::extract_domain_from_url(L"ftp://ftp.example.org/pub") == L"ftp.example.org", "domain example.org");
+
+    std::string payload = "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=https://objects.githubusercontent.com/archive.zip\r\nReferrerUrl=https://github.com/release\r\n";
+    auto info = ZoneIdentifierAuditor::parse_payload(
+        reinterpret_cast<const uint8_t*>(payload.data()),
+        payload.size(),
+        1234,
+        L"D:\\Downloads\\setup.exe",
+        L"setup.exe",
+        1048576
+    );
+
+    check(info.frn == 1234, "frn == 1234");
+    check(info.zone_id == 3, "zone_id == 3");
+    check(info.zone_name.find(L"Internet") != std::wstring::npos, "zone_name has Internet");
+    check(info.host_domain == L"objects.githubusercontent.com", "host_domain matches");
+    check(info.is_executable == true, "setup.exe is executable");
+
+    auto info_doc = ZoneIdentifierAuditor::parse_payload(
+        reinterpret_cast<const uint8_t*>(payload.data()),
+        payload.size(),
+        1235,
+        L"D:\\Downloads\\notes.txt",
+        L"notes.txt",
+        500
+    );
+    check(info_doc.is_executable == false, "notes.txt is not executable");
+}
+
+void test_mft_layout_auditor() {
+    check(MftLayoutAuditor::attribute_type_to_string(0x10).find(L"STANDARD_INFORMATION") != std::wstring::npos, "0x10 is SI");
+    check(MftLayoutAuditor::attribute_type_to_string(0x20).find(L"ATTRIBUTE_LIST") != std::wstring::npos, "0x20 is AL");
+    check(MftLayoutAuditor::attribute_type_to_string(0x30).find(L"FILE_NAME") != std::wstring::npos, "0x30 is FN");
+    check(MftLayoutAuditor::attribute_type_to_string(0x80).find(L"DATA") != std::wstring::npos, "0x80 is DATA");
+    check(MftLayoutAuditor::attribute_type_to_string(0xC0).find(L"REPARSE_POINT") != std::wstring::npos, "0xC0 is REPARSE");
+
+    std::vector<RecordInfo> records;
+    RecordInfo r1;
+    r1.record_index = 100;
+    r1.name = L"small.txt";
+    r1.size_bytes = 100;
+    r1.is_resident = true;
+    records.push_back(r1);
+
+    RecordInfo r2;
+    r2.record_index = 101;
+    r2.name = L"large.dat";
+    r2.size_bytes = 100000;
+    r2.is_resident = false;
+    records.push_back(r2);
+
+    RecordInfo r3;
+    r3.record_index = 102;
+    r3.is_deleted = true;
+    records.push_back(r3);
+
+    VolumeReader mock_vr(L'D');
+    auto report = MftLayoutAuditor::analyze(mock_vr, records, 10);
+    check(report.total_records_evaluated == 3, "total_records_evaluated == 3");
+    check(report.allocated_records == 2, "allocated_records == 2");
+    check(report.unallocated_records == 1, "unallocated_records == 1");
+    check(report.average_bytes_used > 0.0, "average_bytes_used > 0");
+    check(report.average_internal_slack > 0.0, "average_internal_slack > 0");
+    check(report.total_internal_slack_bytes > 0, "total_internal_slack_bytes > 0");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -2031,6 +2103,12 @@ int main() {
     std::wcout << L"[RUN] test_unallocated_analyzer\n";
     test_unallocated_analyzer();
 
-    std::wcout << L"All 48 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_zone_identifier_auditor\n";
+    test_zone_identifier_auditor();
+
+    std::wcout << L"[RUN] test_mft_layout_auditor\n";
+    test_mft_layout_auditor();
+
+    std::wcout << L"All 50 unit test suites passed successfully.\n";
     return 0;
 }

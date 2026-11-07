@@ -708,6 +708,14 @@ void Formatter::print_usn_dump_report(const UsnDumpReport& report) {
     UsnJournalAnalyzer::print_dump_report(report);
 }
 
+void Formatter::print_zone_id_report(const ZoneIdentifierReport& report) {
+    ZoneIdentifierAuditor::print_report(report);
+}
+
+void Formatter::print_mft_layout_report(const MftLayoutReport& report) {
+    MftLayoutAuditor::print_report(report);
+}
+
 
 
 static std::string escape_json_string(const std::wstring& ws) {

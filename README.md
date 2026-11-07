@@ -40,6 +40,8 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **MFT Resident Stream Inlining Advisor**: Identifies small non-resident files (size <= 700 bytes) allocating whole physical disk clusters that can fit residently inside existing MFT record bodies, computing reclaimable clusters, disk space savings, and potential packing ratios (`--inlining`, `--resident-advisor`).
 - **MFT Unallocated Space & Deletion Map Forensics**: Audits the distribution of deleted and unallocated records across the MFT, identifying contiguous deleted record spans (carving target zones), computing unallocated ratios, breaking down recently removed files by extension, and cataloging recoverable files with intact resident or non-resident streams (`--unallocated`, `--freelist`).
 - **USN Journal Sequential Transaction Log Streamer**: Streams raw chronological change events from the active USN Journal (`--usn-dump`), supporting operation reason filtering (`--usn-reason <reason>`, e.g. `CREATE`, `DELETE`, `RENAME`, `SECURITY`, `OVERWRITE`) and custom record limits (`--usn-limit <N>`).
+- **Web Download Provenance & Zone.Identifier (MOTW) Auditor**: Decodes `:Zone.Identifier` Alternate Data Streams across all files to inspect Mark-of-the-Web security zones (Internet, Restricted, Trusted, Intranet), source host domains, referrers, and originating application package family names, flagging executable files downloaded from external zones (`--zone-id`, `--web-downloads`).
+- **MFT Record Internal Packing & Attribute Layout Auditor**: Audits byte-level allocation and utilization across 1024-byte MFT records, computing volume-wide packing density, internal free slack space, frequency distributions of all NTFS attribute types (from `$STANDARD_INFORMATION` to `$LOGGED_UTILITY_STREAM`), and alerting on congested records near capacity (`bytes_used >= 900`) at risk of `$ATTRIBUTE_LIST` spillover (`--mft-layout`, `--record-packing`).
 - **Cluster Allocation & Free-Space Fragmentation Map**: Analyzes the volume cluster allocation bitmap, computing contiguous free extent counts, largest contiguous block, average extent length, free space fragmentation index, and an ASCII cluster allocation map (`--bitmap`, `--free-space`).
 - **NTFS Transaction Journal ($LogFile) Analyzer**: Parses the restart page header (`RSTR`), validating USA fixups, LSN checkpoint tracking, active client lists, and clean vs dirty unmount states (`--logfile`, `--journal`).
 - **Multi-Record Attribute List Decoder**: Decodes `$ATTRIBUTE_LIST` (0x20) mappings to track attributes spanning across multiple base and child MFT record segments for fragmented files and extensive streams.
@@ -138,6 +140,8 @@ Analysis & Views:
   --usn-dump               Stream raw sequential transaction log from USN Journal
   --usn-reason <reason>    Filter USN dump by operation reason (e.g. CREATE, DELETE, RENAME)
   --usn-limit <N>          Maximum USN records to stream (default: 100)
+  --zone-id, --web-downloads Audit web download provenance and Zone.Identifier (MOTW)
+  --mft-layout, --record-packing Audit 1024-byte record internal packing and attribute density
   --ls <dir_FRN>           List directory index contents and carved slack from $INDEX_ROOT
   --watch                  Live monitor real-time volume changes via USN Journal
   --top [N]                List top N largest files (default: 20)
@@ -290,6 +294,12 @@ mftscan D: --usn-dump --usn-limit 50
 
 # Stream only file creation and deletion events from USN Journal
 mftscan D: --usn-dump --usn-reason CREATE
+
+# Audit web-downloaded files and inspect Zone.Identifier provenance
+mftscan D: --zone-id
+
+# Audit internal packing density and attribute distribution within 1024-byte MFT records
+mftscan D: --mft-layout
 
 # Export all executables to JSON
 mftscan D: --ext "exe,dll" --json > binaries.json

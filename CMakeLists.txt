@@ -68,6 +68,7 @@ add_library(mftscan_core STATIC
     include/mftscan/inlining.hpp
     include/mftscan/inspector.hpp
     include/mftscan/logfile.hpp
+    include/mftscan/mft_layout.hpp
     include/mftscan/mft_slack.hpp
     include/mftscan/namespace_auditor.hpp
     include/mftscan/ntfs_defs.hpp
@@ -94,6 +95,7 @@ add_library(mftscan_core STATIC
     include/mftscan/usn_monitor.hpp
     include/mftscan/volume.hpp
     include/mftscan/volume_info.hpp
+    include/mftscan/zone_id.hpp
     src/attr_list.cpp
     src/attrdef.cpp
     src/badclus.cpp
@@ -114,6 +116,7 @@ add_library(mftscan_core STATIC
     src/inlining.cpp
     src/inspector.cpp
     src/logfile.cpp
+    src/mft_layout.cpp
     src/mft_slack.cpp
     src/namespace_auditor.cpp
     src/object_id.cpp
@@ -139,6 +142,7 @@ add_library(mftscan_core STATIC
     src/usn_monitor.cpp
     src/volume.cpp
     src/volume_info.cpp
+    src/zone_id.cpp
 )
 
 target_include_directories(mftscan_core PUBLIC include)

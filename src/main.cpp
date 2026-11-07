@@ -29,6 +29,8 @@
 #include "mftscan/inlining.hpp"
 #include "mftscan/namespace_auditor.hpp"
 #include "mftscan/unallocated_analyzer.hpp"
+#include "mftscan/mft_layout.hpp"
+#include "mftscan/zone_id.hpp"
 #include "mftscan/usn_journal.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
@@ -125,6 +127,8 @@ static void print_help() {
     std::wcout << L"  --namespace-audit, --posix-files Audit file namespace anomalies and hidden POSIX names\n";
     std::wcout << L"  --inlining, --resident-advisor   Identify small non-resident files eligible for MFT inlining\n";
     std::wcout << L"  --unallocated, --freelist Audit unallocated MFT records, deleted spans, and recoverable files\n";
+    std::wcout << L"  --zone-id, --web-downloads Audit web download provenance and Zone.Identifier (MOTW)\n";
+    std::wcout << L"  --mft-layout, --record-packing Audit 1024-byte record internal packing and attribute density\n";
     std::wcout << L"  --usn-dump               Stream raw sequential transaction log from USN Journal\n";
     std::wcout << L"  --usn-reason <reason>    Filter USN dump by operation reason (e.g. CREATE, DELETE, RENAME)\n";
     std::wcout << L"  --usn-limit <N>          Maximum USN records to stream (default: 100)\n";
@@ -198,6 +202,8 @@ int wmain(int argc, wchar_t* argv[]) {
     bool mode_namespace = false;
     bool mode_inlining = false;
     bool mode_unallocated = false;
+    bool mode_zone_id = false;
+    bool mode_mft_layout = false;
     bool mode_usn_dump = false;
     std::wstring usn_reason_filter;
     size_t usn_limit = 100;
@@ -320,6 +326,10 @@ int wmain(int argc, wchar_t* argv[]) {
             mode_inlining = true;
         } else if (arg == L"--unallocated" || arg == L"--freelist") {
             mode_unallocated = true;
+        } else if (arg == L"--zone-id" || arg == L"--web-downloads") {
+            mode_zone_id = true;
+        } else if (arg == L"--mft-layout" || arg == L"--record-packing") {
+            mode_mft_layout = true;
         } else if (arg == L"--usn-dump") {
             mode_usn_dump = true;
         } else if (arg == L"--usn-reason") {
@@ -956,6 +966,16 @@ int wmain(int argc, wchar_t* argv[]) {
     } else if (mode_unallocated) {
         auto unalloc_report = UnallocatedAnalyzer::analyze(records, top_limit);
         Formatter::print_unallocated_report(unalloc_report);
+    } else if (mode_zone_id) {
+        VolumeReader vr(drive_letter);
+        vr.open();
+        auto zid_report = ZoneIdentifierAuditor::analyze(vr, records);
+        Formatter::print_zone_id_report(zid_report);
+    } else if (mode_mft_layout) {
+        VolumeReader vr(drive_letter);
+        vr.open();
+        auto layout_report = MftLayoutAuditor::analyze(vr, records, top_limit);
+        Formatter::print_mft_layout_report(layout_report);
     } else if (mode_objid) {
         VolumeReader vr(drive_letter);
         vr.open();
