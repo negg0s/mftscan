@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2026-11-07
 
 ### Added
+- Anti-forensics and timestomping detector (`TimestompDetector`): cross-checks `$STANDARD_INFORMATION` and `$FILE_NAME` timestamps to expose deliberate timestamp tampering (`--timestomp`), identifying SI creation earlier than FN creation, SI modification earlier than FN creation, nanosecond zeroing artifacts from command-line modification tools, future timestamps, and pre-1980 values.
 - Low-level MFT record inspector (`RecordInspector`): decodes all resident and non-resident record attributes, validates Update Sequence Array fixups, parses attribute headers, and generates formatted 16-byte aligned hexadecimal and ASCII dumps (`--inspect <FRN>`).
 - Interactive TUI details modal: view complete record metadata, fragmentation count, cluster slack space, Alternate Data Streams, and NTFS flags directly inside the fullscreen terminal viewer by pressing `Enter`.
 - NTFS file fragmentation analyzer (`FragmentationAnalyzer`): decodes `$DATA` extents across non-resident files to calculate exact fragmentation metrics (`--defrag`), identifying the most fragmented files on the volume without calling defragmentation APIs.

@@ -7,6 +7,7 @@
 #include "mftscan/privileges.hpp"
 #include "mftscan/scanner.hpp"
 #include "mftscan/sparse_slack_analyzer.hpp"
+#include "mftscan/timestomp.hpp"
 #include "mftscan/tui.hpp"
 #include "mftscan/usn_monitor.hpp"
 
@@ -62,6 +63,7 @@ static void print_help() {
     std::wcout << L"  --defrag [min_frags]     Analyze file fragmentation on volume (default: 1)\n";
     std::wcout << L"  --slack                  Analyze cluster slack space and waste\n";
     std::wcout << L"  --compression            Report NTFS compression and sparse space savings\n";
+    std::wcout << L"  --timestomp              Detect timestamp anomalies and timestomping signatures\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -98,6 +100,7 @@ int wmain(int argc, wchar_t* argv[]) {
     uint32_t defrag_min_frags = 1;
     bool mode_slack = false;
     bool mode_compression = false;
+    bool mode_timestomp = false;
     bool mode_watch = false;
     bool mode_top = false;
     size_t top_limit = 20;
@@ -146,6 +149,8 @@ int wmain(int argc, wchar_t* argv[]) {
             mode_slack = true;
         } else if (arg == L"--compression") {
             mode_compression = true;
+        } else if (arg == L"--timestomp" || arg == L"--forensics") {
+            mode_timestomp = true;
         } else if (arg == L"--sparse") {
             filter.only_sparse = true;
         } else if (arg == L"--compressed") {
@@ -320,6 +325,9 @@ int wmain(int argc, wchar_t* argv[]) {
     } else if (mode_compression) {
         auto comp_report = SparseSlackAnalyzer::analyze_compression(records);
         Formatter::print_compression_table(comp_report);
+    } else if (mode_timestomp) {
+        auto ts_report = TimestompDetector::analyze(records);
+        Formatter::print_timestomp_table(ts_report);
     } else if (mode_top) {
         auto top_files = DiskUsageAnalyzer::top_largest_files(records, top_limit);
         Formatter::print_top_files_table(top_files);

@@ -26,6 +26,8 @@ struct RecordInfo {
     uint64_t allocated_bytes{0};
     uint64_t creation_time{0};
     uint64_t modification_time{0};
+    uint64_t fn_creation_time{0};
+    uint64_t fn_modification_time{0};
     uint32_t attributes{0};
     bool is_directory{false};
     bool is_deleted{false};

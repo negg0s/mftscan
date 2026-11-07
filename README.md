@@ -15,6 +15,7 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **File Fragmentation Analysis**: Decodes non-resident `$DATA` extents to calculate fragment counts and identify the most fragmented files on the volume (`--defrag`).
 - **Cluster Slack Space Analysis**: Measures wasted bytes in the final cluster of non-resident files and pinpoints the largest slack wasters (`--slack`).
 - **Compression & Sparse Space Savings**: Computes physical disk space saved via native NTFS file compression and sparse allocation (`--compression`).
+- **Anti-Forensics & Timestomping Detection**: Cross-examines `$STANDARD_INFORMATION` and `$FILE_NAME` timestamps to detect tampering, such as SI modification before FN creation, inverted creation dates, and zeroed nanosecond fractional seconds (`--timestomp`).
 - **Low-Level Record Inspector**: Decodes raw resident and non-resident attributes, tests fixup integrity, and outputs formatted 16-byte aligned hexadecimal and ASCII previews (`--inspect <FRN>`).
 - **Real-Time Change Monitor**: Reads live filesystem operations via `FSCTL_READ_USN_JOURNAL` (`--watch`), showing creations, deletions, renames, and writes as they happen.
 - **Interactive Fullscreen TUI**: Terminal UI (`-i`, `--tui`) featuring real-time filter-as-you-type search, instant column sorting (F1-F4), and a detailed record metadata modal on pressing `Enter`.
@@ -73,6 +74,7 @@ Analysis & Views:
   --defrag [min_frags]     Analyze file fragmentation on volume (default: 1)
   --slack                  Analyze cluster slack space and waste
   --compression            Report NTFS compression and sparse space savings
+  --timestomp              Detect timestamp anomalies and timestomping signatures
   --watch                  Live monitor real-time volume changes via USN Journal
   --top [N]                List top N largest files (default: 20)
   --du [N]                 Analyze top directory disk consumption (default: 20)
@@ -107,6 +109,9 @@ mftscan D: --slack
 
 # Report disk space savings from NTFS compression and sparse files
 mftscan D: --compression
+
+# Detect timestomping and timestamp manipulation
+mftscan D: --timestomp
 
 # Live watch filesystem change events on volume D:
 mftscan D: --watch

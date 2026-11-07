@@ -63,6 +63,7 @@ add_library(mftscan_core STATIC
     include/mftscan/scanner.hpp
     include/mftscan/sparse_slack_analyzer.hpp
     include/mftscan/thread_pool.hpp
+    include/mftscan/timestomp.hpp
     include/mftscan/tui.hpp
     include/mftscan/usn_monitor.hpp
     include/mftscan/volume.hpp
@@ -80,6 +81,7 @@ add_library(mftscan_core STATIC
     src/scanner.cpp
     src/sparse_slack_analyzer.cpp
     src/thread_pool.cpp
+    src/timestomp.cpp
     src/tui.cpp
     src/usn_monitor.cpp
     src/volume.cpp

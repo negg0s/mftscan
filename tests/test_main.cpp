@@ -12,6 +12,7 @@
 #include "mftscan/record_parser.hpp"
 #include "mftscan/sparse_slack_analyzer.hpp"
 #include "mftscan/thread_pool.hpp"
+#include "mftscan/timestomp.hpp"
 #include "mftscan/usn_monitor.hpp"
 
 #include <cassert>
@@ -489,6 +490,84 @@ static void test_record_inspector_hex_dump() {
     check(dump.find("|FILE0123456789..|") != std::string::npos, "hex dump contains printable ASCII representation");
 }
 
+static void test_timestomp_detection() {
+    std::vector<RecordInfo> records;
+
+    RecordInfo normal_rec;
+    normal_rec.record_index = 10;
+    normal_rec.name = L"normal.txt";
+    normal_rec.full_path = L"D:\\normal.txt";
+    normal_rec.creation_time = 133500000000001234ULL;
+    normal_rec.fn_creation_time = 133500000000001234ULL;
+    normal_rec.modification_time = 133500000000005678ULL;
+    normal_rec.fn_modification_time = 133500000000005678ULL;
+    records.push_back(normal_rec);
+
+    RecordInfo stomped_rec;
+    stomped_rec.record_index = 20;
+    stomped_rec.name = L"malware.dll";
+    stomped_rec.full_path = L"D:\\malware.dll";
+    stomped_rec.creation_time = 130000000000000000ULL;
+    stomped_rec.fn_creation_time = 133500000000001234ULL;
+    records.push_back(stomped_rec);
+
+    RecordInfo zeroed_rec;
+    zeroed_rec.record_index = 30;
+    zeroed_rec.name = L"payload.exe";
+    zeroed_rec.full_path = L"D:\\payload.exe";
+    zeroed_rec.creation_time = 133500000000000000ULL;
+    zeroed_rec.fn_creation_time = 133500000000004321ULL;
+    records.push_back(zeroed_rec);
+
+    RecordInfo ancient_rec;
+    ancient_rec.record_index = 40;
+    ancient_rec.name = L"ancient.bin";
+    ancient_rec.full_path = L"D:\\ancient.bin";
+    ancient_rec.creation_time = 116444736000000000ULL;
+    ancient_rec.fn_creation_time = 116444736000000000ULL;
+    records.push_back(ancient_rec);
+
+    auto report = TimestompDetector::analyze(records);
+    check(report.total_scanned == 4, "timestomp total scanned count");
+    check(report.anomalies_detected == 3, "timestomp detected exactly 3 anomalous files");
+
+    bool found_si_fn_mismatch = false;
+    for (const auto& entry : report.entries) {
+        if (entry.record_index == 20) {
+            for (auto a : entry.anomalies) {
+                if (a == TimestompAnomaly::SiCreatedBeforeFnCreated) {
+                    found_si_fn_mismatch = true;
+                }
+            }
+        }
+    }
+    check(found_si_fn_mismatch, "SiCreatedBeforeFnCreated identified");
+
+    bool found_zeroed = false;
+    for (const auto& entry : report.entries) {
+        if (entry.record_index == 30) {
+            for (auto a : entry.anomalies) {
+                if (a == TimestompAnomaly::NanosecondsZeroed) {
+                    found_zeroed = true;
+                }
+            }
+        }
+    }
+    check(found_zeroed, "NanosecondsZeroed identified");
+
+    bool found_ancient = false;
+    for (const auto& entry : report.entries) {
+        if (entry.record_index == 40) {
+            for (auto a : entry.anomalies) {
+                if (a == TimestompAnomaly::Pre1980Timestamp) {
+                    found_ancient = true;
+                }
+            }
+        }
+    }
+    check(found_ancient, "Pre1980Timestamp identified");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -550,6 +629,9 @@ int main() {
     std::wcout << L"[RUN] test_record_inspector_hex_dump\n";
     test_record_inspector_hex_dump();
 
-    std::wcout << L"All 20 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_timestomp_detection\n";
+    test_timestomp_detection();
+
+    std::wcout << L"All 21 unit test suites passed successfully.\n";
     return 0;
 }

@@ -268,6 +268,44 @@ void Formatter::print_compression_table(const CompressionReport& report) {
     std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
 }
 
+void Formatter::print_timestomp_table(const TimestompReport& report) {
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+    std::wcout << L" Timestomp & Timestamp Anomaly Analysis Report\n";
+    std::wcout << L" Total Files Scanned: " << report.total_scanned
+               << L" | Suspect Records Detected: " << report.anomalies_detected << L"\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+
+    if (report.entries.empty()) {
+        std::wcout << L"No timestamp anomalies detected on volume.\n\n";
+        return;
+    }
+
+    std::wcout << std::left
+               << std::setw(10) << L"FRN"
+               << std::setw(30) << L"Detected Anomaly"
+               << std::setw(22) << L"SI Creation"
+               << std::setw(22) << L"FN Creation"
+               << L"Path\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+
+    for (const auto& entry : report.entries) {
+        std::wstring anomaly_desc;
+        for (size_t i = 0; i < entry.anomalies.size(); ++i) {
+            if (i > 0) anomaly_desc += L", ";
+            anomaly_desc += TimestompDetector::anomaly_to_string(entry.anomalies[i]);
+        }
+
+        std::wstring disp_path = entry.full_path.empty() ? entry.name : entry.full_path;
+        std::wcout << std::left
+                   << std::setw(10) << entry.record_index
+                   << std::setw(30) << (anomaly_desc.size() > 28 ? anomaly_desc.substr(0, 28) : anomaly_desc)
+                   << std::setw(22) << format_filetime(entry.si_creation_time)
+                   << std::setw(22) << format_filetime(entry.fn_creation_time)
+                   << disp_path << L"\n";
+    }
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
+}
+
 static std::string escape_json_string(const std::wstring& ws) {
     std::ostringstream oss;
     for (wchar_t wc : ws) {

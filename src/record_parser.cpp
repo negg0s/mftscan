@@ -137,6 +137,8 @@ std::optional<RecordInfo> RecordParser::parse_record(
                         best_namespace_priority = priority;
                         info.name = std::wstring(name_ptr, name_chars);
                         info.parent_record_index = extract_record_number(fn_hdr->parent_directory_ref);
+                        info.fn_creation_time = fn_hdr->creation_time;
+                        info.fn_modification_time = fn_hdr->modification_time;
                         if (info.size_bytes == 0) {
                             info.size_bytes = fn_hdr->real_size;
                             info.allocated_bytes = fn_hdr->allocated_size;
