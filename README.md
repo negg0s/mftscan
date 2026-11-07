@@ -28,6 +28,8 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **Extended Attributes & Subsystem Metadata**: Decodes packed `$EA` (0xE0) records, discovering POSIX mode, UID, and GID attributes used by Windows Subsystem for Linux (WSL) and custom extended attributes (`--ea`).
 - **Hard Link Forensics & Space Savings Tracker**: Identifies multi-link files (`hard_link_count > 1`), groups sibling link aliases, and calculates volume-wide physical disk allocation saved (`--hardlinks`, `--links`).
 - **USN Journal Health & Event Timeline Forensics**: Inspects journal buffer capacity, allocation delta, and rollover percentage (`--usn-stats`), and extracts chronological operations history for any FRN (`--usn-history <FRN>`).
+- **NTFS Bad Cluster ($BadClus) Surface Health Audit**: Inspects FRN 8 (`$BadClus`) non-sparse data runs of the `$Bad` / `$DATA` stream, pinpointing physical Logical Cluster Numbers (LCNs) of damaged sectors, defective clusters, and media degradation (`--badclus`, `--bad-sectors`).
+- **Volume Disk Quota & Owner Usage Audit**: Extracts `owner_id`, `security_id`, and `quota_charged` from 72-byte `$STANDARD_INFORMATION` records to audit per-owner disk allocations, charged space, and uncharged system records (`--quota`, `--quotas`).
 - **Cluster Allocation & Free-Space Fragmentation Map**: Analyzes the volume cluster allocation bitmap, computing contiguous free extent counts, largest contiguous block, average extent length, free space fragmentation index, and an ASCII cluster allocation map (`--bitmap`, `--free-space`).
 - **NTFS Transaction Journal ($LogFile) Analyzer**: Parses the restart page header (`RSTR`), validating USA fixups, LSN checkpoint tracking, active client lists, and clean vs dirty unmount states (`--logfile`, `--journal`).
 - **Multi-Record Attribute List Decoder**: Decodes `$ATTRIBUTE_LIST` (0x20) mappings to track attributes spanning across multiple base and child MFT record segments for fragmented files and extensive streams.
@@ -112,6 +114,8 @@ Analysis & Views:
   --hardlinks, --links     Audit NTFS hard links and calculate disk space saved
   --usn-stats              Inspect USN Journal buffer capacity, delta, and rollover risk
   --usn-history <FRN>      Extract chronological historical operations for FRN from USN Journal
+  --badclus, --bad-sectors Inspect NTFS $BadClus stream for defective sectors and surface health
+  --quota, --quotas        Audit volume disk quota charged bytes and file counts per owner
   --ls <dir_FRN>           List directory index contents and carved slack from $INDEX_ROOT
   --watch                  Live monitor real-time volume changes via USN Journal
   --top [N]                List top N largest files (default: 20)
@@ -225,6 +229,12 @@ mftscan D: --usn-stats
 
 # Extract chronological modification history for record 12345 from USN Journal
 mftscan D: --usn-history 12345
+
+# Audit defective physical clusters and damaged sectors via $BadClus
+mftscan D: --badclus
+
+# Audit volume disk quota consumption and file count per owner ID
+mftscan D: --quota
 
 # Export all executables to JSON
 mftscan D: --ext "exe,dll" --json > binaries.json

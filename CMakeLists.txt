@@ -48,6 +48,7 @@ endif()
 # Core static library
 add_library(mftscan_core STATIC
     include/mftscan/attr_list.hpp
+    include/mftscan/badclus.hpp
     include/mftscan/bitmap.hpp
     include/mftscan/boot_sector.hpp
     include/mftscan/carver.hpp
@@ -69,6 +70,7 @@ add_library(mftscan_core STATIC
     include/mftscan/path_builder.hpp
     include/mftscan/privileges.hpp
     include/mftscan/query.hpp
+    include/mftscan/quota.hpp
     include/mftscan/raw_streamer.hpp
     include/mftscan/record_parser.hpp
     include/mftscan/reparse.hpp
@@ -84,6 +86,7 @@ add_library(mftscan_core STATIC
     include/mftscan/usn_monitor.hpp
     include/mftscan/volume.hpp
     src/attr_list.cpp
+    src/badclus.cpp
     src/bitmap.cpp
     src/boot_sector.cpp
     src/carver.cpp
@@ -103,6 +106,7 @@ add_library(mftscan_core STATIC
     src/path_builder.cpp
     src/privileges.cpp
     src/query.cpp
+    src/quota.cpp
     src/raw_streamer.cpp
     src/record_parser.cpp
     src/reparse.cpp

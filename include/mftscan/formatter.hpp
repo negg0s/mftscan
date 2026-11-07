@@ -8,6 +8,7 @@
 #endif
 #include <windows.h>
 
+#include "mftscan/badclus.hpp"
 #include "mftscan/bitmap.hpp"
 #include "mftscan/boot_sector.hpp"
 #include "mftscan/carver.hpp"
@@ -21,6 +22,7 @@
 #include "mftscan/logfile.hpp"
 #include "mftscan/mft_slack.hpp"
 #include "mftscan/object_id.hpp"
+#include "mftscan/quota.hpp"
 #include "mftscan/reparse.hpp"
 #include "mftscan/security_auditor.hpp"
 #include "mftscan/signature_verifier.hpp"
@@ -67,6 +69,8 @@ public:
     static void print_hardlink_report(const HardLinkReport& report);
     static void print_usn_stats(const UsnJournalStats& stats);
     static void print_usn_history(const UsnHistoryReport& report);
+    static void print_badclus_report(const BadClusterReport& report);
+    static void print_quota_report(const QuotaReport& report);
 
     static std::string to_json(
         const std::vector<RecordInfo>& records,

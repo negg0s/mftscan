@@ -41,6 +41,9 @@ struct RecordInfo {
     std::vector<std::wstring> ads_names;
     uint16_t hard_link_count{1};
     std::vector<std::wstring> sibling_names;
+    uint32_t owner_id{0};
+    uint32_t security_id{0};
+    uint64_t quota_charged{0};
 };
 
 struct VolumeGeometry {

@@ -660,6 +660,14 @@ void Formatter::print_usn_history(const UsnHistoryReport& report) {
     UsnJournalAnalyzer::print_history_report(report);
 }
 
+void Formatter::print_badclus_report(const BadClusterReport& report) {
+    BadClusterAnalyzer::print_report(report);
+}
+
+void Formatter::print_quota_report(const QuotaReport& report) {
+    QuotaAnalyzer::print_report(report);
+}
+
 
 
 static std::string escape_json_string(const std::wstring& ws) {

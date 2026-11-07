@@ -18,6 +18,8 @@
 #include "mftscan/extended_attributes.hpp"
 #include "mftscan/object_id.hpp"
 #include "mftscan/hardlink.hpp"
+#include "mftscan/badclus.hpp"
+#include "mftscan/quota.hpp"
 #include "mftscan/usn_journal.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
@@ -103,6 +105,8 @@ static void print_help() {
     std::wcout << L"  --hardlinks, --links     Audit NTFS hard links and calculate disk space saved\n";
     std::wcout << L"  --usn-stats              Inspect USN Journal buffer capacity, delta, and rollover risk\n";
     std::wcout << L"  --usn-history <FRN>      Extract chronological historical operations for FRN from USN Journal\n";
+    std::wcout << L"  --badclus, --bad-sectors Inspect NTFS defective cluster map and surface health ($BadClus)\n";
+    std::wcout << L"  --quota, --quotas        Audit NTFS per-owner disk quota consumption and allocation\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -161,6 +165,8 @@ int wmain(int argc, wchar_t* argv[]) {
     bool mode_usn_stats = false;
     bool mode_usn_history = false;
     uint64_t usn_history_frn = 0;
+    bool mode_badclus = false;
+    bool mode_quota = false;
     uint64_t carve_frn = 0;
     std::wstring carve_out_path;
     std::wstring carve_stream_name;
@@ -255,6 +261,10 @@ int wmain(int argc, wchar_t* argv[]) {
             if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
                 usn_history_frn = _wcstoui64(argv[++i], nullptr, 10);
             }
+        } else if (arg == L"--badclus" || arg == L"--bad-sectors") {
+            mode_badclus = true;
+        } else if (arg == L"--quota" || arg == L"--quotas") {
+            mode_quota = true;
         } else if (arg == L"--carve-deleted") {
             mode_carve_deleted = true;
             if (i + 1 < argc) carve_deleted_dir = argv[++i];
@@ -445,6 +455,26 @@ int wmain(int argc, wchar_t* argv[]) {
         }
 
         Formatter::print_boot_sector_report(boot_res.value());
+        return 0;
+    }
+
+    // Bad cluster mode: Inspect $BadClus defective cluster map
+    if (mode_badclus) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        auto bad_res = BadClusterAnalyzer::analyze(vr);
+        if (!bad_res) {
+            std::wcerr << L"Failed to analyze $BadClus: " << bad_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        Formatter::print_badclus_report(bad_res.value());
         return 0;
     }
 
@@ -741,6 +771,9 @@ int wmain(int argc, wchar_t* argv[]) {
     } else if (mode_hardlinks) {
         auto hl_report = HardLinkTracker::analyze(records);
         Formatter::print_hardlink_report(hl_report);
+    } else if (mode_quota) {
+        auto q_report = QuotaAnalyzer::analyze(records);
+        Formatter::print_quota_report(q_report);
     } else if (mode_density) {
         auto density_rep = DensityAnalyzer::analyze(records, geom.bytes_per_cluster);
         Formatter::print_density_report(density_rep);

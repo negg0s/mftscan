@@ -19,6 +19,8 @@
 #include "mftscan/extended_attributes.hpp"
 #include "mftscan/object_id.hpp"
 #include "mftscan/hardlink.hpp"
+#include "mftscan/badclus.hpp"
+#include "mftscan/quota.hpp"
 #include "mftscan/usn_journal.hpp"
 #include <cstring>
 #include "mftscan/bitmap.hpp"
@@ -1179,6 +1181,80 @@ static void test_usn_journal_stats() {
     check(s.utilization_percentage > 10.0 && s.utilization_percentage < 15.0, "utilization_percentage in expected range");
 }
 
+static void test_bad_cluster_report() {
+    BadClusterReport report;
+    report.total_volume_clusters = 50000000;
+
+    BadClusterExtent ext1;
+    ext1.start_lcn = 100000;
+    ext1.cluster_count = 4;
+    ext1.byte_length = 16384;
+    report.extents.push_back(ext1);
+
+    BadClusterExtent ext2;
+    ext2.start_lcn = 250000;
+    ext2.cluster_count = 8;
+    ext2.byte_length = 32768;
+    report.extents.push_back(ext2);
+
+    report.bad_cluster_count = 12;
+    report.bad_bytes_count = 49152;
+    report.is_healthy = false;
+
+    check(!report.is_healthy, "report is_healthy is false");
+    check(report.bad_cluster_count == 12, "bad_cluster_count matches 12");
+    check(report.bad_bytes_count == 49152, "bad_bytes_count matches 49152");
+    check(report.extents.size() == 2, "2 extents present");
+    check(report.extents[0].start_lcn == 100000, "extent 0 lcn matches");
+    check(report.extents[1].start_lcn == 250000, "extent 1 lcn matches");
+}
+
+static void test_quota_analyzer() {
+    std::vector<RecordInfo> records;
+
+    RecordInfo r1;
+    r1.record_index = 1000;
+    r1.owner_id = 1;
+    r1.size_bytes = 10485760;
+    r1.quota_charged = 10485760;
+    records.push_back(r1);
+
+    RecordInfo r2;
+    r2.record_index = 1001;
+    r2.owner_id = 1;
+    r2.size_bytes = 5242880;
+    r2.quota_charged = 5242880;
+    records.push_back(r2);
+
+    RecordInfo r3;
+    r3.record_index = 1002;
+    r3.owner_id = 2;
+    r3.size_bytes = 2097152;
+    r3.quota_charged = 2097152;
+    records.push_back(r3);
+
+    RecordInfo r4;
+    r4.record_index = 1003;
+    r4.owner_id = 0;
+    r4.size_bytes = 1024;
+    r4.quota_charged = 0; // uncharged
+    records.push_back(r4);
+
+    RecordInfo dir;
+    dir.record_index = 5;
+    dir.is_directory = true;
+    records.push_back(dir);
+
+    auto rep = QuotaAnalyzer::analyze(records);
+    check(rep.total_files_analyzed == 4, "total_files_analyzed matches 4");
+    check(rep.total_quota_charged_bytes == 17825792, "total_quota_charged_bytes matches 17825792");
+    check(rep.uncharged_files_count == 1, "uncharged_files_count matches 1");
+    check(rep.owners.size() == 3, "3 distinct owners present");
+    check(rep.owners[0].owner_id == 1, "top owner is ID 1");
+    check(rep.owners[0].total_quota_charged == 15728640, "owner 1 charged matches 15728640");
+    check(rep.owners[0].file_count == 2, "owner 1 file_count matches 2");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -1284,7 +1360,12 @@ int main() {
 
     std::wcout << L"[RUN] test_usn_journal_stats\n";
     test_usn_journal_stats();
+    std::wcout << L"[RUN] test_bad_cluster_report\n";
+    test_bad_cluster_report();
 
-    std::wcout << L"All 36 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_quota_analyzer\n";
+    test_quota_analyzer();
+
+    std::wcout << L"All 38 unit test suites passed successfully.\n";
     return 0;
 }

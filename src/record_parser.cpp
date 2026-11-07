@@ -108,6 +108,9 @@ std::optional<RecordInfo> RecordParser::parse_record(
                 info.creation_time = si->creation_time;
                 info.modification_time = si->modification_time;
                 info.attributes = si->file_attributes;
+                info.owner_id = si->owner_id;
+                info.security_id = si->security_id;
+                info.quota_charged = si->quota_charged;
             }
         }
         // 2. $FILE_NAME (0x30)
