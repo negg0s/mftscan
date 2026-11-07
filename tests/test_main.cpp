@@ -4,6 +4,7 @@
 #include "mftscan/duplicate_detector.hpp"
 #include "mftscan/formatter.hpp"
 #include "mftscan/fragmentation_analyzer.hpp"
+#include "mftscan/inspector.hpp"
 #include "mftscan/ntfs_defs.hpp"
 #include "mftscan/path_builder.hpp"
 #include "mftscan/privileges.hpp"
@@ -461,6 +462,33 @@ static void test_thread_pool() {
     check(counter.load() == 50, "thread pool processed all 50 tasks concurrently");
 }
 
+static void test_record_inspector_attribute_names() {
+    check(RecordInspector::attribute_type_to_string(0x10) == L"$STANDARD_INFORMATION", "0x10 standard information");
+    check(RecordInspector::attribute_type_to_string(0x20) == L"$ATTRIBUTE_LIST", "0x20 attribute list");
+    check(RecordInspector::attribute_type_to_string(0x30) == L"$FILE_NAME", "0x30 file name");
+    check(RecordInspector::attribute_type_to_string(0x40) == L"$OBJECT_ID", "0x40 object id");
+    check(RecordInspector::attribute_type_to_string(0x50) == L"$SECURITY_DESCRIPTOR", "0x50 security descriptor");
+    check(RecordInspector::attribute_type_to_string(0x60) == L"$VOLUME_NAME", "0x60 volume name");
+    check(RecordInspector::attribute_type_to_string(0x70) == L"$VOLUME_INFORMATION", "0x70 volume information");
+    check(RecordInspector::attribute_type_to_string(0x80) == L"$DATA", "0x80 data");
+    check(RecordInspector::attribute_type_to_string(0x90) == L"$INDEX_ROOT", "0x90 index root");
+    check(RecordInspector::attribute_type_to_string(0xA0) == L"$INDEX_ALLOCATION", "0xA0 index allocation");
+    check(RecordInspector::attribute_type_to_string(0xB0) == L"$BITMAP", "0xB0 bitmap");
+    check(RecordInspector::attribute_type_to_string(0xC0) == L"$REPARSE_POINT", "0xC0 reparse point");
+    check(RecordInspector::attribute_type_to_string(0x100) == L"$LOGGED_UTILITY_STREAM", "0x100 logged utility stream");
+    check(RecordInspector::attribute_type_to_string(0x1234).find(L"UNKNOWN") != std::wstring::npos, "unknown type code formatted");
+}
+
+static void test_record_inspector_hex_dump() {
+    check(RecordInspector::format_hex_dump(nullptr, 0).empty(), "empty data produces empty hex dump");
+
+    const uint8_t sample_bytes[] = "FILE0123456789\x01\x02";
+    std::string dump = RecordInspector::format_hex_dump(sample_bytes, sizeof(sample_bytes) - 1, 32);
+    check(!dump.empty(), "hex dump output not empty");
+    check(dump.find("0000: ") != std::string::npos, "hex dump contains line prefix 0000:");
+    check(dump.find("|FILE0123456789..|") != std::string::npos, "hex dump contains printable ASCII representation");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -516,6 +544,12 @@ int main() {
     std::wcout << L"[RUN] test_thread_pool\n";
     test_thread_pool();
 
-    std::wcout << L"All 18 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_record_inspector_attribute_names\n";
+    test_record_inspector_attribute_names();
+
+    std::wcout << L"[RUN] test_record_inspector_hex_dump\n";
+    test_record_inspector_hex_dump();
+
+    std::wcout << L"All 20 unit test suites passed successfully.\n";
     return 0;
 }

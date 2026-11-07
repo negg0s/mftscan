@@ -39,6 +39,7 @@ private:
     bool sort_ascending_{false};
     size_t selected_index_{0};
     size_t scroll_offset_{0};
+    bool show_detail_modal_{false};
 
     HANDLE h_stdin_{INVALID_HANDLE_VALUE};
     HANDLE h_stdout_{INVALID_HANDLE_VALUE};

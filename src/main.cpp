@@ -3,6 +3,7 @@
 #include "mftscan/duplicate_detector.hpp"
 #include "mftscan/formatter.hpp"
 #include "mftscan/fragmentation_analyzer.hpp"
+#include "mftscan/inspector.hpp"
 #include "mftscan/privileges.hpp"
 #include "mftscan/scanner.hpp"
 #include "mftscan/sparse_slack_analyzer.hpp"
@@ -56,6 +57,7 @@ static void print_help() {
     std::wcout << L"  --compressed             Filter NTFS-compressed files only\n\n";
     std::wcout << L"Analysis & Views:\n";
     std::wcout << L"  -i, --tui                Interactive fullscreen Terminal UI with live filtering\n";
+    std::wcout << L"  --inspect <FRN>          Low-level MFT record inspector and attribute hex dump\n";
     std::wcout << L"  --dup [min_size]         Scan for duplicate files by size and hash (default: 4KB)\n";
     std::wcout << L"  --defrag [min_frags]     Analyze file fragmentation on volume (default: 1)\n";
     std::wcout << L"  --slack                  Analyze cluster slack space and waste\n";
@@ -88,6 +90,8 @@ int wmain(int argc, wchar_t* argv[]) {
     wchar_t drive_letter = L'D';
     QueryFilter filter;
     bool mode_tui = false;
+    bool mode_inspect = false;
+    uint64_t inspect_frn = 0;
     bool mode_dup = false;
     uint64_t dup_min_size = 4096;
     bool mode_defrag = false;
@@ -114,7 +118,7 @@ int wmain(int argc, wchar_t* argv[]) {
             return 0;
         }
         if (arg == L"-v" || arg == L"--version") {
-            std::wcout << L"mftscan 0.2.0 (Windows x64/ARM64)\n";
+            std::wcout << L"mftscan 0.3.0 (Windows x64/ARM64)\n";
             return 0;
         }
         if (arg.size() == 2 && arg[1] == L':' && iswalpha(arg[0])) {
@@ -123,6 +127,11 @@ int wmain(int argc, wchar_t* argv[]) {
         }
         if (arg == L"-i" || arg == L"--tui") {
             mode_tui = true;
+        } else if (arg == L"--inspect" || arg == L"--dump") {
+            mode_inspect = true;
+            if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
+                inspect_frn = static_cast<uint64_t>(_wtoi64(argv[++i]));
+            }
         } else if (arg == L"--dup") {
             mode_dup = true;
             if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
@@ -196,6 +205,26 @@ int wmain(int argc, wchar_t* argv[]) {
         } else if (arg == L"--fallback") {
             force_fallback = true;
         }
+    }
+
+    // Inspect mode: Direct record attribute inspection
+    if (mode_inspect) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        auto insp_res = RecordInspector::inspect(vr, inspect_frn);
+        if (!insp_res) {
+            std::wcerr << L"Failed to inspect record " << inspect_frn << L": " << insp_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        RecordInspector::print_report(insp_res.value());
+        return 0;
     }
 
     // Watch mode: Monitor live USN journal events

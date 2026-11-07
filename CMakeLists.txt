@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(mftscan
-    VERSION 0.1.0
+    VERSION 0.3.0
     LANGUAGES CXX
 )
 
@@ -53,6 +53,7 @@ add_library(mftscan_core STATIC
     include/mftscan/duplicate_detector.hpp
     include/mftscan/formatter.hpp
     include/mftscan/fragmentation_analyzer.hpp
+    include/mftscan/inspector.hpp
     include/mftscan/ntfs_defs.hpp
     include/mftscan/path_builder.hpp
     include/mftscan/privileges.hpp
@@ -70,6 +71,7 @@ add_library(mftscan_core STATIC
     src/duplicate_detector.cpp
     src/formatter.cpp
     src/fragmentation_analyzer.cpp
+    src/inspector.cpp
     src/path_builder.cpp
     src/privileges.cpp
     src/query.cpp

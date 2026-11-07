@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2026-11-07
 
 ### Added
+- Low-level MFT record inspector (`RecordInspector`): decodes all resident and non-resident record attributes, validates Update Sequence Array fixups, parses attribute headers, and generates formatted 16-byte aligned hexadecimal and ASCII dumps (`--inspect <FRN>`).
+- Interactive TUI details modal: view complete record metadata, fragmentation count, cluster slack space, Alternate Data Streams, and NTFS flags directly inside the fullscreen terminal viewer by pressing `Enter`.
 - NTFS file fragmentation analyzer (`FragmentationAnalyzer`): decodes `$DATA` extents across non-resident files to calculate exact fragmentation metrics (`--defrag`), identifying the most fragmented files on the volume without calling defragmentation APIs.
 - Cluster slack space analyzer (`SparseSlackAnalyzer`): calculates wasted slack bytes in final allocated clusters across all non-resident files (`--slack`) and ranks the largest slack space wasters.
 - NTFS compression and sparse allocation savings analyzer (`SparseSlackAnalyzer`): calculates exact physical disk space saved via native NTFS compression (`--compressed`) and sparse files (`--sparse`), comparing logical byte lengths with allocated physical clusters (`--compression`).

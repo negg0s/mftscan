@@ -15,8 +15,9 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **File Fragmentation Analysis**: Decodes non-resident `$DATA` extents to calculate fragment counts and identify the most fragmented files on the volume (`--defrag`).
 - **Cluster Slack Space Analysis**: Measures wasted bytes in the final cluster of non-resident files and pinpoints the largest slack wasters (`--slack`).
 - **Compression & Sparse Space Savings**: Computes physical disk space saved via native NTFS file compression and sparse allocation (`--compression`).
+- **Low-Level Record Inspector**: Decodes raw resident and non-resident attributes, tests fixup integrity, and outputs formatted 16-byte aligned hexadecimal and ASCII previews (`--inspect <FRN>`).
 - **Real-Time Change Monitor**: Reads live filesystem operations via `FSCTL_READ_USN_JOURNAL` (`--watch`), showing creations, deletions, renames, and writes as they happen.
-- **Interactive Fullscreen TUI**: Terminal UI (`-i`, `--tui`) featuring real-time filter-as-you-type search and instant column sorting (F1-F4) using pure Win32 Virtual Terminal escape sequences.
+- **Interactive Fullscreen TUI**: Terminal UI (`-i`, `--tui`) featuring real-time filter-as-you-type search, instant column sorting (F1-F4), and a detailed record metadata modal on pressing `Enter`.
 - **Alternate Data Stream (ADS) Discovery**: Detects secondary named `$DATA` streams attached to files.
 - **Deleted Record Recovery**: Identifies unallocated MFT records (`--deleted`) whose metadata remains intact before sector overwrites.
 - **Disk Usage Analysis**: Calculates top space-consuming files (`--top`), directory aggregation rollups (`--du`), and file type histograms (`--types`).
@@ -67,7 +68,11 @@ Search Filters:
 
 Analysis & Views:
   -i, --tui                Interactive fullscreen Terminal UI with live filtering
+  --inspect <FRN>          Low-level MFT record inspector and attribute hex dump
   --dup [min_size]         Scan for duplicate files by size and hash (default: 4KB)
+  --defrag [min_frags]     Analyze file fragmentation on volume (default: 1)
+  --slack                  Analyze cluster slack space and waste
+  --compression            Report NTFS compression and sparse space savings
   --watch                  Live monitor real-time volume changes via USN Journal
   --top [N]                List top N largest files (default: 20)
   --du [N]                 Analyze top directory disk consumption (default: 20)
@@ -85,11 +90,23 @@ Output Formats:
 ### Examples
 
 ```powershell
-# Interactive fullscreen Terminal UI
+# Interactive fullscreen Terminal UI (press Enter on any row to open record details)
 mftscan D: -i
+
+# Low-level MFT record inspector and attribute hex dump for record 0 ($MFT)
+mftscan D: --inspect 0
 
 # Find duplicate files consuming disk space
 mftscan D: --dup 10MB
+
+# Analyze file fragmentation and find most fragmented files
+mftscan D: --defrag 5
+
+# Analyze cluster slack space waste
+mftscan D: --slack
+
+# Report disk space savings from NTFS compression and sparse files
+mftscan D: --compression
 
 # Live watch filesystem change events on volume D:
 mftscan D: --watch
