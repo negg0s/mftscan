@@ -13,6 +13,8 @@
 #include "mftscan/bitmap.hpp"
 #include "mftscan/boot_sector.hpp"
 #include "mftscan/reparse.hpp"
+#include "mftscan/density.hpp"
+#include "mftscan/mft_slack.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
 #include "mftscan/system_files.hpp"
@@ -90,6 +92,8 @@ static void print_help() {
     std::wcout << L"  --logfile, --journal     Inspect NTFS transaction journal ($LogFile) restart area and health\n";
     std::wcout << L"  --boot, --bpb            Inspect NTFS Boot Sector (BPB) and verify against backup boot sector\n";
     std::wcout << L"  --reparse, --symlinks    List directory junctions, symbolic links, and reparse points\n";
+    std::wcout << L"  --mft-slack <FRN>        Inspect MFT record slack space forensics and residual strings\n";
+    std::wcout << L"  --density, --efficiency  Audit storage density, resident MFT files, and packing efficiency\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -139,6 +143,9 @@ int wmain(int argc, wchar_t* argv[]) {
     bool mode_logfile = false;
     bool mode_boot = false;
     bool mode_reparse = false;
+    bool mode_mft_slack = false;
+    uint64_t mft_slack_frn = 0;
+    bool mode_density = false;
     uint64_t carve_frn = 0;
     std::wstring carve_out_path;
     std::wstring carve_stream_name;
@@ -213,6 +220,13 @@ int wmain(int argc, wchar_t* argv[]) {
             mode_boot = true;
         } else if (arg == L"--reparse" || arg == L"--symlinks" || arg == L"--junctions") {
             mode_reparse = true;
+        } else if (arg == L"--mft-slack") {
+            mode_mft_slack = true;
+            if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
+                mft_slack_frn = _wcstoui64(argv[++i], nullptr, 10);
+            }
+        } else if (arg == L"--density" || arg == L"--efficiency") {
+            mode_density = true;
         } else if (arg == L"--carve-deleted") {
             mode_carve_deleted = true;
             if (i + 1 < argc) carve_deleted_dir = argv[++i];
@@ -403,6 +417,26 @@ int wmain(int argc, wchar_t* argv[]) {
         }
 
         Formatter::print_boot_sector_report(boot_res.value());
+        return 0;
+    }
+
+    // MFT Slack mode: Direct record slack space inspection and carving
+    if (mode_mft_slack) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        auto slack_res = MftSlackCarver::inspect_record(vr, mft_slack_frn);
+        if (!slack_res) {
+            std::wcerr << L"Failed to analyze record slack for FRN " << mft_slack_frn << L": " << slack_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        Formatter::print_mft_slack_report(slack_res.value());
         return 0;
     }
 
@@ -635,6 +669,9 @@ int wmain(int argc, wchar_t* argv[]) {
     } else if (mode_types) {
         auto type_stats = DiskUsageAnalyzer::compute_extension_histogram(records, types_limit);
         Formatter::print_extension_histogram_table(type_stats);
+    } else if (mode_density) {
+        auto density_rep = DensityAnalyzer::analyze(records, geom.bytes_per_cluster);
+        Formatter::print_density_report(density_rep);
     } else {
         Formatter::print_results_table(records, display_limit);
     }

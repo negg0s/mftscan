@@ -538,6 +538,46 @@ void Formatter::print_reparse_report(const std::vector<ReparseInfo>& list) {
     std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
 }
 
+void Formatter::print_mft_slack_report(const MftSlackReport& report) {
+    std::wcout << L"MFT Record Slack Space Forensics (FRN " << report.frn << L")\n";
+    std::wcout << L"--------------------------------------------------------------------------------\n";
+    std::wcout << L"Bytes Used:               " << report.bytes_used << L" / " << report.bytes_allocated << L" bytes\n";
+    std::wcout << L"Record Slack Size:        " << report.slack_size << L" bytes\n";
+    std::wcout << L"Slack State:              " << (report.has_non_zero_slack ? L"Residual data detected" : L"Zero-filled (Clean)") << L"\n";
+    std::wcout << L"Non-Zero Slack Bytes:     " << report.non_zero_bytes_count << L" bytes\n";
+
+    if (!report.residual_attributes.empty()) {
+        std::wcout << L"\nResidual Attributes Found (" << report.residual_attributes.size() << L"):\n";
+        for (const auto& ra : report.residual_attributes) {
+            std::wcout << L"  * Offset +0x" << std::hex << ra.offset << std::dec
+                       << L": " << ra.type_name << L" (Length: " << ra.length << L" bytes)\n";
+        }
+    }
+
+    if (!report.residual_strings.empty()) {
+        std::wcout << L"\nResidual Strings Found (" << report.residual_strings.size() << L"):\n";
+        for (const auto& rs : report.residual_strings) {
+            std::wcout << L"  * [+" << rs.offset << L", " << (rs.is_utf16 ? L"UTF-16" : L"ASCII") << L"]: \""
+                       << rs.text << L"\"\n";
+        }
+    }
+
+    if (!report.hex_dump.empty()) {
+        std::wcout << L"\nSlack Payload Hex Dump:\n";
+        std::istringstream stream(report.hex_dump);
+        std::string line;
+        while (std::getline(stream, line)) {
+            std::wcout << L"  " << std::wstring(line.begin(), line.end()) << L"\n";
+        }
+    }
+    std::wcout << L"--------------------------------------------------------------------------------\n\n";
+}
+
+void Formatter::print_density_report(const DensityReport& report) {
+    DensityAnalyzer::print_report(report);
+}
+
+
 static std::string escape_json_string(const std::wstring& ws) {
     std::ostringstream oss;
     for (wchar_t wc : ws) {

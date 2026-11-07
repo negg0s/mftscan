@@ -20,6 +20,10 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **NTFS Security & DACL Auditing**: Audits security descriptors, identifying NULL DACLs (unrestricted access), empty DACLs, world-writable files granted to Everyone or Authenticated Users, unmapped orphaned SIDs from removed accounts, and inheritance status (`--security`, `--world-writable`, `--orphaned-sids`).
 - **Raw Cluster File Carving & Deleted Recovery**: Directly streams and extracts file contents from raw disk clusters or resident MFT payloads for any FRN (`--carve <FRN> --out <path>`), supporting Alternate Data Streams (`--stream <name>`), cluster slack extraction (`--include-slack`), and batch deleted file recovery (`--carve-deleted <dir>`).
 - **Core NTFS System Metadata Files Explorer**: Audits all reserved system records (FRN 0 to 11: `$MFT`, `$MFTMirr`, `$LogFile`, `$Volume`, `$AttrDef`, root directory, `$Bitmap`, `$Boot`, `$BadClus`, `$Secure`, `$UpCase`, `$Extend`), displaying version, dirty state, allocated sizes, and bad cluster counts (`--system`, `--meta`).
+- **NTFS Boot Sector (BPB) & Backup Verification**: Decodes primary and backup BIOS Parameter Blocks at sector 0 and the volume end, validating OEM ID, sector matching, and volume geometry (`--boot`, `--bpb`).
+- **Reparse Points & Directory Junctions**: Decodes `$REPARSE_POINT` (0xC0) structures for Directory Junctions, Symbolic Links, Compact OS compression, and cloud placeholders, verifying broken link targets (`--reparse`, `--symlinks`).
+- **MFT Record Slack Space Forensics**: Extracts residual ASCII/UTF-16 strings and residual attribute headers left behind in unallocated MFT record slack bytes (`--mft-slack <FRN>`).
+- **NTFS Storage Density & Packing Efficiency Audit**: Calculates resident file ratios, cluster slack saved via resident MFT inlining, payload efficiency percentages, and file size distribution histograms (`--density`, `--efficiency`).
 - **Cluster Allocation & Free-Space Fragmentation Map**: Analyzes the volume cluster allocation bitmap, computing contiguous free extent counts, largest contiguous block, average extent length, free space fragmentation index, and an ASCII cluster allocation map (`--bitmap`, `--free-space`).
 - **NTFS Transaction Journal ($LogFile) Analyzer**: Parses the restart page header (`RSTR`), validating USA fixups, LSN checkpoint tracking, active client lists, and clean vs dirty unmount states (`--logfile`, `--journal`).
 - **Multi-Record Attribute List Decoder**: Decodes `$ATTRIBUTE_LIST` (0x20) mappings to track attributes spanning across multiple base and child MFT record segments for fragmented files and extensive streams.
@@ -95,6 +99,10 @@ Analysis & Views:
   --system, --meta         Inspect core NTFS system metadata files ($MFT, $Volume, $Bitmap)
   --bitmap, --free-space   Analyze volume cluster allocation and free-space fragmentation map
   --logfile, --journal     Inspect NTFS transaction journal ($LogFile) restart area and health
+  --boot, --bpb            Inspect NTFS Boot Sector (BPB) and verify against backup boot sector
+  --reparse, --symlinks    List directory junctions, symbolic links, and reparse points
+  --mft-slack <FRN>        Inspect MFT record slack space forensics and residual strings
+  --density, --efficiency  Audit storage density, resident MFT files, and packing efficiency
   --ls <dir_FRN>           List directory index contents and carved slack from $INDEX_ROOT
   --watch                  Live monitor real-time volume changes via USN Journal
   --top [N]                List top N largest files (default: 20)
@@ -181,6 +189,18 @@ mftscan D: --bitmap
 
 # Inspect NTFS transaction journal ($LogFile) restart area and volume unmount state
 mftscan D: --logfile
+
+# Inspect primary and backup NTFS Boot Sectors and verify BPB geometry
+mftscan D: --boot
+
+# List reparse points, directory junctions, and symbolic links
+mftscan D: --reparse
+
+# Extract residual strings and unallocated attribute slack from MFT record
+mftscan D: --mft-slack 12345
+
+# Audit storage density, resident MFT file savings, and size distributions
+mftscan D: --density
 
 # Export all executables to JSON
 mftscan D: --ext "exe,dll" --json > binaries.json

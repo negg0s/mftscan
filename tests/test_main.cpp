@@ -14,6 +14,9 @@
 #include "mftscan/attr_list.hpp"
 #include "mftscan/boot_sector.hpp"
 #include "mftscan/reparse.hpp"
+#include "mftscan/density.hpp"
+#include "mftscan/mft_slack.hpp"
+#include <cstring>
 #include "mftscan/bitmap.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
@@ -951,6 +954,101 @@ static void test_reparse_point_analyzer() {
     check(rj.target_path == junc_target, "junction target path matches");
 }
 
+static void test_mft_slack_carver() {
+    std::vector<uint8_t> buf(1024, 0);
+    auto* hdr = reinterpret_cast<MftRecordHeader*>(buf.data());
+    hdr->magic = kMftMagicFile;
+    hdr->bytes_used = 400;
+    hdr->bytes_allocated = 1024;
+    hdr->flags = kRecordInUse;
+
+    // Place residual ASCII string at offset 420
+    const std::string residual_str = "ResidualForensicArtifact.doc";
+    memcpy(buf.data() + 420, residual_str.data(), residual_str.size());
+
+    // Place residual attribute header at offset 500: $FILE_NAME (0x30), length 64
+    auto* attr = reinterpret_cast<AttributeRecordHeader*>(buf.data() + 500);
+    attr->type_code = kAttrFileName;
+    attr->record_length = 64;
+    attr->non_resident_flag = 0;
+
+    auto res = MftSlackCarver::analyze_record_slack(buf.data(), 1024, 12345);
+    check(res.ok(), "analyze_record_slack ok");
+    const auto& report = res.value();
+
+    check(report.frn == 12345, "frn matches");
+    check(report.bytes_used == 400, "bytes_used matches");
+    check(report.bytes_allocated == 1024, "bytes_allocated matches");
+    check(report.slack_size == 624, "slack_size matches");
+    check(report.has_non_zero_slack, "has_non_zero_slack is true");
+    check(report.non_zero_bytes_count >= residual_str.size(), "non_zero_bytes_count >= string size");
+
+    bool found_str = false;
+    for (const auto& s : report.residual_strings) {
+        if (s.text.find(L"ResidualForensicArtifact") != std::wstring::npos) {
+            found_str = true;
+            break;
+        }
+    }
+    check(found_str, "residual string extracted");
+
+    bool found_attr = false;
+    for (const auto& a : report.residual_attributes) {
+        if (a.type_code == kAttrFileName && a.length == 64) {
+            found_attr = true;
+            break;
+        }
+    }
+    check(found_attr, "residual attribute header extracted");
+    check(!report.hex_dump.empty(), "hex dump generated");
+}
+
+static void test_density_analyzer() {
+    std::vector<RecordInfo> records;
+
+    // Record 0: directory
+    RecordInfo d;
+    d.record_index = 5;
+    d.is_directory = true;
+    records.push_back(d);
+
+    // Record 1: small resident file (300 B)
+    RecordInfo r1;
+    r1.record_index = 100;
+    r1.size_bytes = 300;
+    r1.allocated_bytes = 0;
+    r1.is_resident = true;
+    records.push_back(r1);
+
+    // Record 2: non-resident file (5000 B, allocated 8192 B, slack 3192 B)
+    RecordInfo r2;
+    r2.record_index = 101;
+    r2.size_bytes = 5000;
+    r2.allocated_bytes = 8192;
+    r2.slack_bytes = 3192;
+    r2.is_resident = false;
+    records.push_back(r2);
+
+    // Record 3: empty file (0 B)
+    RecordInfo r3;
+    r3.record_index = 102;
+    r3.size_bytes = 0;
+    r3.allocated_bytes = 0;
+    r3.is_resident = true;
+    records.push_back(r3);
+
+    auto report = DensityAnalyzer::analyze(records, 4096);
+    check(report.total_records == 4, "total records matches");
+    check(report.active_directories == 1, "active directories matches");
+    check(report.active_files == 3, "active files matches");
+    check(report.resident_files == 2, "resident files matches");
+    check(report.non_resident_files == 1, "non-resident files matches");
+    check(report.zero_byte_files == 1, "zero byte files matches");
+    check(report.total_resident_bytes == 300, "total resident bytes matches");
+    check(report.cluster_slack_saved_bytes == 8192, "cluster slack saved bytes matches (2 * 4096)");
+    check(report.buckets.size() == 9, "9 size buckets present");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -1041,7 +1139,12 @@ int main() {
 
     std::wcout << L"[RUN] test_reparse_point_analyzer\n";
     test_reparse_point_analyzer();
+    std::wcout << L"[RUN] test_mft_slack_carver\n";
+    test_mft_slack_carver();
 
-    std::wcout << L"All 30 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_density_analyzer\n";
+    test_density_analyzer();
+
+    std::wcout << L"All 32 unit test suites passed successfully.\n";
     return 0;
 }

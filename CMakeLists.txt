@@ -53,6 +53,7 @@ add_library(mftscan_core STATIC
     include/mftscan/carver.hpp
     include/mftscan/common.hpp
     include/mftscan/data_run.hpp
+    include/mftscan/density.hpp
     include/mftscan/disk_usage.hpp
     include/mftscan/duplicate_detector.hpp
     include/mftscan/formatter.hpp
@@ -60,6 +61,7 @@ add_library(mftscan_core STATIC
     include/mftscan/index_parser.hpp
     include/mftscan/inspector.hpp
     include/mftscan/logfile.hpp
+    include/mftscan/mft_slack.hpp
     include/mftscan/ntfs_defs.hpp
     include/mftscan/path_builder.hpp
     include/mftscan/privileges.hpp
@@ -82,6 +84,7 @@ add_library(mftscan_core STATIC
     src/boot_sector.cpp
     src/carver.cpp
     src/data_run.cpp
+    src/density.cpp
     src/disk_usage.cpp
     src/duplicate_detector.cpp
     src/formatter.cpp
@@ -89,6 +92,7 @@ add_library(mftscan_core STATIC
     src/index_parser.cpp
     src/inspector.cpp
     src/logfile.cpp
+    src/mft_slack.cpp
     src/path_builder.cpp
     src/privileges.cpp
     src/query.cpp
