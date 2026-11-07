@@ -37,6 +37,10 @@ constexpr uint32_t kAttrIndexRoot           = 0x90;
 constexpr uint32_t kAttrIndexAllocation     = 0xA0;
 constexpr uint32_t kAttrBitmap              = 0xB0;
 constexpr uint32_t kAttrReparsePoint        = 0xC0;
+constexpr uint32_t kAttrEaInformation       = 0xD0;
+constexpr uint32_t kAttrEa                  = 0xE0;
+constexpr uint32_t kAttrPropertySet         = 0xF0;
+constexpr uint32_t kAttrLoggedUtilityStream = 0x100;
 constexpr uint32_t kAttrEnd                 = 0xFFFFFFFF;
 
 // Well-known MFT record numbers

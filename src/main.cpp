@@ -20,6 +20,8 @@
 #include "mftscan/hardlink.hpp"
 #include "mftscan/badclus.hpp"
 #include "mftscan/quota.hpp"
+#include "mftscan/attrdef.hpp"
+#include "mftscan/churn.hpp"
 #include "mftscan/usn_journal.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
@@ -107,6 +109,8 @@ static void print_help() {
     std::wcout << L"  --usn-history <FRN>      Extract chronological historical operations for FRN from USN Journal\n";
     std::wcout << L"  --badclus, --bad-sectors Inspect NTFS defective cluster map and surface health ($BadClus)\n";
     std::wcout << L"  --quota, --quotas        Audit NTFS per-owner disk quota consumption and allocation\n";
+    std::wcout << L"  --attrdef, --schema      Inspect NTFS attribute definition table ($AttrDef) schema\n";
+    std::wcout << L"  --churn, --sequence-audit Audit MFT record sequence numbers and churn distribution\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -167,6 +171,9 @@ int wmain(int argc, wchar_t* argv[]) {
     uint64_t usn_history_frn = 0;
     bool mode_badclus = false;
     bool mode_quota = false;
+    bool mode_attrdef = false;
+    bool mode_churn = false;
+    size_t churn_limit = 20;
     uint64_t carve_frn = 0;
     std::wstring carve_out_path;
     std::wstring carve_stream_name;
@@ -265,6 +272,13 @@ int wmain(int argc, wchar_t* argv[]) {
             mode_badclus = true;
         } else if (arg == L"--quota" || arg == L"--quotas") {
             mode_quota = true;
+        } else if (arg == L"--attrdef" || arg == L"--schema") {
+            mode_attrdef = true;
+        } else if (arg == L"--churn" || arg == L"--sequence-audit") {
+            mode_churn = true;
+            if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
+                churn_limit = static_cast<size_t>(_wtoi(argv[++i]));
+            }
         } else if (arg == L"--carve-deleted") {
             mode_carve_deleted = true;
             if (i + 1 < argc) carve_deleted_dir = argv[++i];
@@ -475,6 +489,26 @@ int wmain(int argc, wchar_t* argv[]) {
         }
 
         Formatter::print_badclus_report(bad_res.value());
+        return 0;
+    }
+
+    // AttrDef mode: Direct schema inspection
+    if (mode_attrdef) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        auto ad_res = AttrDefAnalyzer::inspect(vr);
+        if (!ad_res) {
+            std::wcerr << L"Failed to inspect $AttrDef: " << ad_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        Formatter::print_attrdef_report(ad_res.value());
         return 0;
     }
 
@@ -774,6 +808,9 @@ int wmain(int argc, wchar_t* argv[]) {
     } else if (mode_quota) {
         auto q_report = QuotaAnalyzer::analyze(records);
         Formatter::print_quota_report(q_report);
+    } else if (mode_churn) {
+        auto ch_report = ChurnAnalyzer::analyze(records, churn_limit);
+        Formatter::print_churn_report(ch_report);
     } else if (mode_density) {
         auto density_rep = DensityAnalyzer::analyze(records, geom.bytes_per_cluster);
         Formatter::print_density_report(density_rep);

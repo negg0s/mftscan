@@ -8,10 +8,12 @@
 #endif
 #include <windows.h>
 
+#include "mftscan/attrdef.hpp"
 #include "mftscan/badclus.hpp"
 #include "mftscan/bitmap.hpp"
 #include "mftscan/boot_sector.hpp"
 #include "mftscan/carver.hpp"
+#include "mftscan/churn.hpp"
 #include "mftscan/common.hpp"
 #include "mftscan/density.hpp"
 #include "mftscan/disk_usage.hpp"
@@ -71,6 +73,8 @@ public:
     static void print_usn_history(const UsnHistoryReport& report);
     static void print_badclus_report(const BadClusterReport& report);
     static void print_quota_report(const QuotaReport& report);
+    static void print_attrdef_report(const AttrDefReport& report);
+    static void print_churn_report(const ChurnReport& report);
 
     static std::string to_json(
         const std::vector<RecordInfo>& records,

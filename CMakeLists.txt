@@ -48,10 +48,12 @@ endif()
 # Core static library
 add_library(mftscan_core STATIC
     include/mftscan/attr_list.hpp
+    include/mftscan/attrdef.hpp
     include/mftscan/badclus.hpp
     include/mftscan/bitmap.hpp
     include/mftscan/boot_sector.hpp
     include/mftscan/carver.hpp
+    include/mftscan/churn.hpp
     include/mftscan/common.hpp
     include/mftscan/data_run.hpp
     include/mftscan/density.hpp
@@ -86,10 +88,12 @@ add_library(mftscan_core STATIC
     include/mftscan/usn_monitor.hpp
     include/mftscan/volume.hpp
     src/attr_list.cpp
+    src/attrdef.cpp
     src/badclus.cpp
     src/bitmap.cpp
     src/boot_sector.cpp
     src/carver.cpp
+    src/churn.cpp
     src/data_run.cpp
     src/density.cpp
     src/disk_usage.cpp

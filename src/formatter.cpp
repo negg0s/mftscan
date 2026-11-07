@@ -668,6 +668,14 @@ void Formatter::print_quota_report(const QuotaReport& report) {
     QuotaAnalyzer::print_report(report);
 }
 
+void Formatter::print_attrdef_report(const AttrDefReport& report) {
+    AttrDefAnalyzer::print_report(report);
+}
+
+void Formatter::print_churn_report(const ChurnReport& report) {
+    ChurnAnalyzer::print_report(report);
+}
+
 
 
 static std::string escape_json_string(const std::wstring& ws) {

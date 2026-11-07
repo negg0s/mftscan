@@ -21,6 +21,8 @@
 #include "mftscan/hardlink.hpp"
 #include "mftscan/badclus.hpp"
 #include "mftscan/quota.hpp"
+#include "mftscan/attrdef.hpp"
+#include "mftscan/churn.hpp"
 #include "mftscan/usn_journal.hpp"
 #include <cstring>
 #include "mftscan/bitmap.hpp"
@@ -1255,6 +1257,124 @@ static void test_quota_analyzer() {
     check(rep.owners[0].file_count == 2, "owner 1 file_count matches 2");
 }
 
+static void test_attrdef_analyzer() {
+    std::vector<RawAttrDefEntry> entries(3);
+    std::memset(entries.data(), 0, entries.size() * sizeof(RawAttrDefEntry));
+
+    // Entry 1: $STANDARD_INFORMATION
+    const wchar_t* n1 = L"$STANDARD_INFORMATION";
+    std::memcpy(entries[0].name, n1, wcslen(n1) * sizeof(wchar_t));
+    entries[0].type_code = 0x10;
+    entries[0].display_rule = 0;
+    entries[0].collation_rule = 0x00; // BINARY
+    entries[0].flags = 0x40; // MULTIPLE
+    entries[0].min_size = 48;
+    entries[0].max_size = 72;
+
+    // Entry 2: $FILE_NAME
+    const wchar_t* n2 = L"$FILE_NAME";
+    std::memcpy(entries[1].name, n2, wcslen(n2) * sizeof(wchar_t));
+    entries[1].type_code = 0x30;
+    entries[1].display_rule = 0;
+    entries[1].collation_rule = 0x01; // FILE_NAME
+    entries[1].flags = 0x42; // INDEXABLE | MULTIPLE
+    entries[1].min_size = 68;
+    entries[1].max_size = 578;
+
+    // Entry 3: Custom attribute
+    const wchar_t* n3 = L"$CUSTOM_TELEMETRY";
+    std::memcpy(entries[2].name, n3, wcslen(n3) * sizeof(wchar_t));
+    entries[2].type_code = 0x200;
+    entries[2].display_rule = 0;
+    entries[2].collation_rule = 0x00;
+    entries[2].flags = 0x80; // NOT_RESIDENT
+    entries[2].min_size = 0;
+    entries[2].max_size = 1048576;
+
+    const uint8_t* raw_bytes = reinterpret_cast<const uint8_t*>(entries.data());
+    const size_t raw_len = entries.size() * sizeof(RawAttrDefEntry);
+
+    auto rep = AttrDefAnalyzer::parse_from_buffer(raw_bytes, raw_len, L'C');
+    check(rep.valid, "rep.valid is true");
+    check(rep.total_definitions == 3, "total_definitions == 3");
+    check(rep.standard_types_count == 2, "standard_types_count == 2");
+    check(rep.custom_types_count == 1, "custom_types_count == 1");
+    check(rep.indexable_count == 1, "indexable_count == 1");
+    check(rep.multiple_count == 2, "multiple_count == 2");
+
+    check(rep.entries[0].name == L"$STANDARD_INFORMATION", "entry 0 name matches");
+    check(rep.entries[0].type_code == 0x10, "entry 0 type code matches");
+    check(rep.entries[0].collation_name == L"BINARY", "entry 0 collation matches BINARY");
+
+    check(rep.entries[1].name == L"$FILE_NAME", "entry 1 name matches");
+    check(rep.entries[1].is_indexable, "entry 1 is_indexable is true");
+    check(rep.entries[1].collation_name == L"FILE_NAME", "entry 1 collation matches FILE_NAME");
+
+    check(rep.entries[2].is_custom, "entry 2 is_custom is true");
+    check(rep.entries[2].not_resident, "entry 2 not_resident is true");
+    check(rep.entries[2].max_size == 1048576, "entry 2 max_size matches 1048576");
+}
+
+static void test_churn_analyzer() {
+    std::vector<RecordInfo> records;
+
+    RecordInfo r1;
+    r1.record_index = 100;
+    r1.sequence_number = 2;
+    r1.size_bytes = 5000;
+    records.push_back(r1);
+
+    RecordInfo r2;
+    r2.record_index = 101;
+    r2.sequence_number = 12;
+    r2.size_bytes = 8000;
+    records.push_back(r2);
+
+    RecordInfo r3;
+    r3.record_index = 102;
+    r3.sequence_number = 75;
+    r3.size_bytes = 12000;
+    records.push_back(r3);
+
+    RecordInfo r4;
+    r4.record_index = 103;
+    r4.sequence_number = 61000;
+    r4.size_bytes = 3000;
+    records.push_back(r4);
+
+    RecordInfo r5;
+    r5.record_index = 104;
+    r5.sequence_number = 150;
+    r5.size_bytes = 0;
+    r5.is_deleted = true;
+    records.push_back(r5);
+
+    RecordInfo r6;
+    r6.record_index = 105;
+    r6.sequence_number = 0; // invalid
+    records.push_back(r6);
+
+    auto rep = ChurnAnalyzer::analyze(records, 5);
+    check(rep.total_records_evaluated == 6, "total_records_evaluated matches 6");
+    check(rep.active_records == 5, "active_records matches 5");
+    check(rep.deleted_records == 1, "deleted_records matches 1");
+    check(rep.min_sequence == 2, "min_sequence matches 2");
+    check(rep.max_sequence == 61000, "max_sequence matches 61000");
+    check(rep.rollover_risk_count == 1, "rollover_risk_count matches 1");
+
+    check(rep.tier_1_to_5 == 1, "tier_1_to_5 matches 1");
+    check(rep.tier_6_to_20 == 1, "tier_6_to_20 matches 1");
+    check(rep.tier_51_to_100 == 1, "tier_51_to_100 matches 1");
+    check(rep.tier_101_to_500 == 1, "tier_101_to_500 matches 1");
+    check(rep.tier_above_500 == 1, "tier_above_500 matches 1");
+
+    check(rep.top_churn_records.size() == 5, "top_churn_records size matches 5");
+    check(rep.top_churn_records[0].frn == 103, "top churn record 0 frn is 103");
+    check(rep.top_churn_records[0].sequence_number == 61000, "top churn record 0 seq is 61000");
+    check(rep.top_churn_records[1].frn == 104, "top churn record 1 frn is 104");
+    check(rep.top_churn_records[1].is_deleted, "top churn record 1 is_deleted is true");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -1366,6 +1486,12 @@ int main() {
     std::wcout << L"[RUN] test_quota_analyzer\n";
     test_quota_analyzer();
 
-    std::wcout << L"All 38 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_attrdef_analyzer\n";
+    test_attrdef_analyzer();
+
+    std::wcout << L"[RUN] test_churn_analyzer\n";
+    test_churn_analyzer();
+
+    std::wcout << L"All 40 unit test suites passed successfully.\n";
     return 0;
 }
