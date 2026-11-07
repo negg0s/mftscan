@@ -8,6 +8,7 @@
 #endif
 #include <windows.h>
 
+#include "mftscan/bitmap.hpp"
 #include "mftscan/carver.hpp"
 #include "mftscan/common.hpp"
 #include "mftscan/disk_usage.hpp"
@@ -16,6 +17,7 @@
 #include "mftscan/security_auditor.hpp"
 #include "mftscan/signature_verifier.hpp"
 #include "mftscan/sparse_slack_analyzer.hpp"
+#include "mftscan/system_files.hpp"
 #include "mftscan/timestomp.hpp"
 #include "mftscan/usn_monitor.hpp"
 
@@ -44,6 +46,8 @@ public:
     static void print_signature_report(const SignatureReport& report);
     static void print_security_report(const std::vector<SecurityAuditResult>& results);
     static void print_carve_summary(const BatchCarveStats& stats, const std::wstring& out_dir);
+    static void print_system_audit_report(const SystemAuditReport& report);
+    static void print_bitmap_report(const BitmapReport& report);
 
     static std::string to_json(
         const std::vector<RecordInfo>& records,

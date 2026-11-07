@@ -135,6 +135,22 @@ struct FileNamePayloadHeader {
     uint8_t  file_name_namespace;      // 0 = POSIX, 1 = Win32, 2 = DOS, 3 = Win32 & DOS
 };
 
+// $VOLUME_INFORMATION attribute payload (0x70)
+struct VolumeInformationPayload {
+    uint64_t reserved;
+    uint8_t  major_version;
+    uint8_t  minor_version;
+    uint16_t volume_flags;
+};
+
+constexpr uint16_t kVolumeDirty             = 0x0001;
+constexpr uint16_t kVolumeResizeLogFile     = 0x0002;
+constexpr uint16_t kVolumeUpgradeOnMount    = 0x0004;
+constexpr uint16_t kVolumeMountedDirty      = 0x0008;
+constexpr uint16_t kVolumeDeleteUsnUnderway = 0x0010;
+constexpr uint16_t kVolumeRepairObjectIds   = 0x0020;
+constexpr uint16_t kVolumeModifiedByChkntfs = 0x8000;
+
 #pragma pack(pop)
 
 // File Reference extraction helper

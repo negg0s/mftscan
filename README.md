@@ -19,6 +19,8 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **File Signature & Masquerading Detection**: Inspects magic byte signatures (`MZ`, `%PDF`, `PK`, `7z`, `Rar!`, `PNG`, `JPEG`, etc.) to discover file extension spoofing and flag executables masquerading as documents or media (`--type-mismatch`).
 - **NTFS Security & DACL Auditing**: Audits security descriptors, identifying NULL DACLs (unrestricted access), empty DACLs, world-writable files granted to Everyone or Authenticated Users, unmapped orphaned SIDs from removed accounts, and inheritance status (`--security`, `--world-writable`, `--orphaned-sids`).
 - **Raw Cluster File Carving & Deleted Recovery**: Directly streams and extracts file contents from raw disk clusters or resident MFT payloads for any FRN (`--carve <FRN> --out <path>`), supporting Alternate Data Streams (`--stream <name>`), cluster slack extraction (`--include-slack`), and batch deleted file recovery (`--carve-deleted <dir>`).
+- **Core NTFS System Metadata Files Explorer**: Audits all reserved system records (FRN 0 to 11: `$MFT`, `$MFTMirr`, `$LogFile`, `$Volume`, `$AttrDef`, root directory, `$Bitmap`, `$Boot`, `$BadClus`, `$Secure`, `$UpCase`, `$Extend`), displaying version, dirty state, allocated sizes, and bad cluster counts (`--system`, `--meta`).
+- **Cluster Allocation & Free-Space Fragmentation Map**: Analyzes the volume cluster allocation bitmap, computing contiguous free extent counts, largest contiguous block, average extent length, free space fragmentation index, and an ASCII cluster allocation map (`--bitmap`, `--free-space`).
 - **Directory Index B-Tree Walker & Slack Carver**: Decodes `$INDEX_ROOT` and `$INDEX_ALLOCATION` nodes to list directory contents directly from internal B-Trees (`--ls <dir_FRN>`) and carves residual deleted index entries from index slack space.
 - **Low-Level Record Inspector**: Decodes raw resident and non-resident attributes, tests fixup integrity, and outputs formatted 16-byte aligned hexadecimal and ASCII previews (`--inspect <FRN>`).
 - **Real-Time Change Monitor**: Reads live filesystem operations via `FSCTL_READ_USN_JOURNAL` (`--watch`), showing creations, deletions, renames, and writes as they happen.
@@ -165,6 +167,12 @@ mftscan D: --carve 12345 --out recovered.bin
 
 # Batch carve all deleted PDF files into recovery directory
 mftscan D: --carve-deleted .\recovered_pdfs --ext pdf
+
+# Inspect core NTFS system metadata files ($MFT, $LogFile, $Volume, $Bitmap)
+mftscan D: --system
+
+# Analyze cluster allocation and display ASCII volume block map
+mftscan D: --bitmap
 
 # Export all executables to JSON
 mftscan D: --ext "exe,dll" --json > binaries.json

@@ -47,6 +47,7 @@ endif()
 
 # Core static library
 add_library(mftscan_core STATIC
+    include/mftscan/bitmap.hpp
     include/mftscan/carver.hpp
     include/mftscan/common.hpp
     include/mftscan/data_run.hpp
@@ -66,11 +67,13 @@ add_library(mftscan_core STATIC
     include/mftscan/security_auditor.hpp
     include/mftscan/signature_verifier.hpp
     include/mftscan/sparse_slack_analyzer.hpp
+    include/mftscan/system_files.hpp
     include/mftscan/thread_pool.hpp
     include/mftscan/timestomp.hpp
     include/mftscan/tui.hpp
     include/mftscan/usn_monitor.hpp
     include/mftscan/volume.hpp
+    src/bitmap.cpp
     src/carver.cpp
     src/data_run.cpp
     src/disk_usage.cpp
@@ -88,6 +91,7 @@ add_library(mftscan_core STATIC
     src/security_auditor.cpp
     src/signature_verifier.cpp
     src/sparse_slack_analyzer.cpp
+    src/system_files.cpp
     src/thread_pool.cpp
     src/timestomp.cpp
     src/tui.cpp

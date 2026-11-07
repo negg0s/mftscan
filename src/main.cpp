@@ -8,7 +8,9 @@
 #include "mftscan/privileges.hpp"
 #include "mftscan/scanner.hpp"
 #include "mftscan/signature_verifier.hpp"
+#include "mftscan/bitmap.hpp"
 #include "mftscan/carver.hpp"
+#include "mftscan/system_files.hpp"
 #include "mftscan/security_auditor.hpp"
 #include "mftscan/sparse_slack_analyzer.hpp"
 #include "mftscan/timestomp.hpp"
@@ -78,6 +80,8 @@ static void print_help() {
     std::wcout << L"  --stream <name>          Alternate Data Stream name to carve (default: unnamed $DATA)\n";
     std::wcout << L"  --carve-deleted <dir>    Carve all deleted files on volume to directory\n";
     std::wcout << L"  --include-slack          Include cluster slack bytes when carving\n";
+    std::wcout << L"  --system, --meta         Inspect core NTFS system metadata files ($MFT, $Volume, $Bitmap)\n";
+    std::wcout << L"  --bitmap, --free-space   Analyze volume cluster allocation and free-space fragmentation map\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -122,6 +126,8 @@ int wmain(int argc, wchar_t* argv[]) {
     bool filter_world_writable = false;
     bool filter_orphaned_sids = false;
     bool mode_carve = false;
+    bool mode_system = false;
+    bool mode_bitmap = false;
     uint64_t carve_frn = 0;
     std::wstring carve_out_path;
     std::wstring carve_stream_name;
@@ -186,6 +192,10 @@ int wmain(int argc, wchar_t* argv[]) {
             if (i + 1 < argc) carve_out_path = argv[++i];
         } else if (arg == L"--stream") {
             if (i + 1 < argc) carve_stream_name = argv[++i];
+        } else if (arg == L"--system" || arg == L"--meta") {
+            mode_system = true;
+        } else if (arg == L"--bitmap" || arg == L"--free-space") {
+            mode_bitmap = true;
         } else if (arg == L"--carve-deleted") {
             mode_carve_deleted = true;
             if (i + 1 < argc) carve_deleted_dir = argv[++i];
@@ -296,6 +306,46 @@ int wmain(int argc, wchar_t* argv[]) {
         std::wcout << L"  Size:         " << Formatter::format_bytes(cr.bytes_written) << L" (" << cr.bytes_written << L" bytes)\n";
         std::wcout << L"  Storage:      " << (cr.is_resident ? L"Resident in MFT" : (L"Non-resident (" + std::to_wstring(cr.clusters_read) + L" clusters)")) << L"\n";
         std::wcout << L"  State:        " << (cr.is_deleted_record ? L"Deleted / Unallocated Record" : L"Active Record") << L"\n\n";
+        return 0;
+    }
+
+    // System metadata mode: Audit all reserved NTFS metadata files
+    if (mode_system) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        auto sys_res = SystemFilesInspector::inspect(vr);
+        if (!sys_res) {
+            std::wcerr << L"Failed to inspect system files: " << sys_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        Formatter::print_system_audit_report(sys_res.value());
+        return 0;
+    }
+
+    // Bitmap mode: Analyze volume cluster allocation and free space fragmentation
+    if (mode_bitmap) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        auto bmp_res = BitmapAnalyzer::analyze(vr, 64);
+        if (!bmp_res) {
+            std::wcerr << L"Failed to analyze volume bitmap: " << bmp_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        Formatter::print_bitmap_report(bmp_res.value());
         return 0;
     }
 

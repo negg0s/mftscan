@@ -416,6 +416,65 @@ void Formatter::print_carve_summary(const BatchCarveStats& stats, const std::wst
     std::wcout << L"------------------------------------------------------------\n\n";
 }
 
+void Formatter::print_system_audit_report(const SystemAuditReport& report) {
+    std::wcout << L"NTFS System Metadata Files & Volume Integrity Report (Volume " << report.volume_letter << L":)\n";
+    std::wcout << L"NTFS Version: v" << static_cast<int>(report.ntfs_major_version) << L"." << static_cast<int>(report.ntfs_minor_version)
+               << L" | Volume State: " << (report.is_dirty ? L"[DIRTY / RECOVERY NEEDED]" : L"Clean")
+               << L" | Bad Clusters: " << report.bad_clusters_count << L"\n\n";
+
+    std::wcout << std::left
+               << std::setw(6)  << L"FRN"
+               << std::setw(12) << L"Name"
+               << std::setw(12) << L"Size"
+               << std::setw(14) << L"Allocated"
+               << std::setw(8)  << L"Frags"
+               << std::setw(36) << L"Purpose"
+               << L"Extra Info\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+
+    for (const auto& f : report.files) {
+        std::wstring size_str = f.is_resident ? (format_bytes(f.size_bytes) + L" (R)") : format_bytes(f.size_bytes);
+        std::wstring alloc_str = format_bytes(f.allocated_bytes);
+
+        std::wcout << std::left
+                   << std::setw(6)  << f.frn
+                   << std::setw(12) << f.standard_name
+                   << std::setw(12) << size_str
+                   << std::setw(14) << alloc_str
+                   << std::setw(8)  << f.fragment_count
+                   << std::setw(36) << f.purpose
+                   << f.extra_info << L"\n";
+    }
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
+}
+
+void Formatter::print_bitmap_report(const BitmapReport& report) {
+    std::wcout << L"NTFS Volume Cluster Allocation & Free Space Report (Volume " << report.volume_letter << L":)\n";
+    std::wcout << L"--------------------------------------------------------------------------------\n";
+    std::wcout << L"Total Clusters:                  " << report.total_clusters
+               << L" (" << format_bytes(report.total_clusters * report.bytes_per_cluster) << L")\n";
+    std::wcout << L"Used Clusters:                   " << report.used_clusters
+               << L" (" << format_bytes(report.used_clusters * report.bytes_per_cluster) << L")\n";
+    std::wcout << L"Free Clusters:                   " << report.free_clusters
+               << L" (" << format_bytes(report.free_clusters * report.bytes_per_cluster) << L", "
+               << std::fixed << std::setprecision(2) << report.free_percent << L"%)\n";
+    std::wcout << L"Free Extents (Contiguous runs):  " << report.free_extents_count << L"\n";
+    std::wcout << L"Largest Free Contiguous Block:   " << report.largest_free_extent_clusters
+               << L" clusters (" << format_bytes(report.largest_free_extent_clusters * report.bytes_per_cluster) << L")\n";
+    std::wcout << L"Average Free Block Size:         " << static_cast<uint64_t>(report.avg_free_extent_clusters)
+               << L" clusters (" << format_bytes(static_cast<uint64_t>(report.avg_free_extent_clusters * report.bytes_per_cluster)) << L")\n";
+    std::wcout << L"Smallest Free Block Size:        " << report.smallest_free_extent_clusters
+               << L" clusters (" << format_bytes(report.smallest_free_extent_clusters * report.bytes_per_cluster) << L")\n";
+    std::wcout << L"Free Space Fragmentation Index:  " << std::fixed << std::setprecision(2)
+               << report.free_space_fragmentation_index << L"%\n";
+    std::wcout << L"\nCluster Allocation Map (Width: " << (report.ascii_map.size() >= 2 ? report.ascii_map.size() - 2 : 0) << L" blocks):\n";
+    std::wcout << L"  [ # = full (>=99%), + = heavy (>=50%), - = sparse (>0%), . = free (0%) ]\n";
+    std::string s = report.ascii_map;
+    std::wstring ws(s.begin(), s.end());
+    std::wcout << L"  " << ws << L"\n";
+    std::wcout << L"--------------------------------------------------------------------------------\n\n";
+}
+
 static std::string escape_json_string(const std::wstring& ws) {
     std::ostringstream oss;
     for (wchar_t wc : ws) {

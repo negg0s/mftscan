@@ -11,7 +11,9 @@
 #include "mftscan/query.hpp"
 #include "mftscan/record_parser.hpp"
 #include "mftscan/signature_verifier.hpp"
+#include "mftscan/bitmap.hpp"
 #include "mftscan/carver.hpp"
+#include "mftscan/system_files.hpp"
 #include "mftscan/security_auditor.hpp"
 #include "mftscan/sparse_slack_analyzer.hpp"
 #include "mftscan/thread_pool.hpp"
@@ -738,6 +740,45 @@ static void test_file_carver() {
     check(memcmp(read_back, test_data, payload_len) == 0, "read back data matches exactly");
 }
 
+static void test_system_files_inspector() {
+    check(wcscmp(SystemFilesInspector::get_standard_system_name(0), L"$MFT") == 0, "system file 0 is $MFT");
+    check(wcscmp(SystemFilesInspector::get_standard_system_name(1), L"$MFTMirr") == 0, "system file 1 is $MFTMirr");
+    check(wcscmp(SystemFilesInspector::get_standard_system_name(2), L"$LogFile") == 0, "system file 2 is $LogFile");
+    check(wcscmp(SystemFilesInspector::get_standard_system_name(3), L"$Volume") == 0, "system file 3 is $Volume");
+    check(wcscmp(SystemFilesInspector::get_standard_system_name(4), L"$AttrDef") == 0, "system file 4 is $AttrDef");
+    check(wcscmp(SystemFilesInspector::get_standard_system_name(5), L". (Root)") == 0, "system file 5 is . (Root)");
+    check(wcscmp(SystemFilesInspector::get_standard_system_name(6), L"$Bitmap") == 0, "system file 6 is $Bitmap");
+    check(wcscmp(SystemFilesInspector::get_standard_system_name(7), L"$Boot") == 0, "system file 7 is $Boot");
+    check(wcscmp(SystemFilesInspector::get_standard_system_name(8), L"$BadClus") == 0, "system file 8 is $BadClus");
+    check(wcscmp(SystemFilesInspector::get_standard_system_name(9), L"$Secure") == 0, "system file 9 is $Secure");
+    check(wcscmp(SystemFilesInspector::get_standard_system_name(10), L"$UpCase") == 0, "system file 10 is $UpCase");
+    check(wcscmp(SystemFilesInspector::get_standard_system_name(11), L"$Extend") == 0, "system file 11 is $Extend");
+    check(wcslen(SystemFilesInspector::get_standard_system_purpose(0)) > 0, "system purpose non-empty");
+}
+
+static void test_bitmap_analyzer() {
+    // 64 clusters = 8 bytes
+    // Byte 0: 0xFF (8 used)
+    // Byte 1: 0x00 (8 free)
+    // Byte 2: 0xAA = 10101010b (4 used, 4 free)
+    // Byte 3..7: 0x00 (40 free in a single continuous run)
+    uint8_t bmp[8] = { 0xFF, 0x00, 0xAA, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
+    auto res = BitmapAnalyzer::analyze_from_buffer(bmp, 64, 4096, L'C', 16);
+    check(res.ok(), "analyze_from_buffer ok");
+    const auto& r = res.value();
+
+    check(r.total_clusters == 64, "total clusters is 64");
+    check(r.used_clusters == 12, "used clusters is 12");
+    check(r.free_clusters == 52, "free clusters is 52");
+    check(r.largest_free_extent_clusters == 40, "largest free extent is 40");
+    check(r.ascii_map.size() == 18, "ascii map length is 18 (16 blocks + brackets)");
+    check(r.ascii_map.front() == '[', "ascii map start bracket");
+    check(r.ascii_map.back() == ']', "ascii map end bracket");
+    check(r.free_percent > 80.0, "free percentage > 80%");
+    check(r.free_space_fragmentation_index >= 0.0, "fragmentation index non-negative");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -811,6 +852,12 @@ int main() {
     std::wcout << L"[RUN] test_file_carver\n";
     test_file_carver();
 
-    std::wcout << L"All 24 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_system_files_inspector\n";
+    test_system_files_inspector();
+
+    std::wcout << L"[RUN] test_bitmap_analyzer\n";
+    test_bitmap_analyzer();
+
+    std::wcout << L"All 26 unit test suites passed successfully.\n";
     return 0;
 }
