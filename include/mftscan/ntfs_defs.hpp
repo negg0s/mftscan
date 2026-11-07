@@ -151,6 +151,51 @@ constexpr uint16_t kVolumeDeleteUsnUnderway = 0x0010;
 constexpr uint16_t kVolumeRepairObjectIds   = 0x0020;
 constexpr uint16_t kVolumeModifiedByChkntfs = 0x8000;
 
+// $ATTRIBUTE_LIST entry header (0x20)
+struct AttributeListEntryHeader {
+    uint32_t attribute_type;          // Type code (e.g. 0x30, 0x80)
+    uint16_t record_length;           // Byte length of this entry
+    uint8_t  name_length;             // Name length in characters
+    uint8_t  name_offset;             // Offset to name from entry start
+    uint64_t lowest_vcn;              // Lowest VCN for non-resident split
+    uint64_t file_reference_number;   // MFT record segment where attribute is stored
+    uint16_t attribute_id;            // Attribute instance tag
+};
+
+// $LogFile page and restart area headers
+constexpr uint32_t kLogFileMagicRstr = 0x52545352; // 'RSTR'
+constexpr uint32_t kLogFileMagicRcrd = 0x44524352; // 'RCRD'
+constexpr uint16_t kLogFileCleanShutdown = 0x0002;
+
+struct LogFileRestartPageHeader {
+    uint32_t magic;                    // 'RSTR'
+    uint16_t update_sequence_offset;
+    uint16_t update_sequence_size;
+    uint64_t chksum_or_file_offset;
+    uint32_t system_page_size;
+    uint32_t log_page_size;
+    uint16_t restart_area_offset;
+    int16_t  minor_version;
+    int16_t  major_version;
+};
+
+struct LogFileRestartArea {
+    uint64_t current_lsn;              // Current Log Sequence Number
+    uint16_t log_clients;              // Number of active clients
+    uint16_t client_free_list;         // First free client index
+    uint16_t client_in_use_list;       // First in-use client index
+    uint16_t flags;                    // 0x0002 = Volume was cleanly unmounted
+    uint32_t seq_number_bits;
+    uint16_t restart_area_length;
+    uint16_t client_array_offset;
+    uint64_t file_size;
+    uint32_t last_lsn_data_length;
+    uint16_t record_header_length;
+    uint16_t log_page_data_offset;
+    uint32_t restart_open_log_count;
+    uint32_t reserved;
+};
+
 #pragma pack(pop)
 
 // File Reference extraction helper

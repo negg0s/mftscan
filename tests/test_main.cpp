@@ -11,7 +11,9 @@
 #include "mftscan/query.hpp"
 #include "mftscan/record_parser.hpp"
 #include "mftscan/signature_verifier.hpp"
+#include "mftscan/attr_list.hpp"
 #include "mftscan/bitmap.hpp"
+#include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
 #include "mftscan/system_files.hpp"
 #include "mftscan/security_auditor.hpp"
@@ -779,6 +781,90 @@ static void test_bitmap_analyzer() {
     check(r.free_space_fragmentation_index >= 0.0, "fragmentation index non-negative");
 }
 
+static void test_attr_list_decoder() {
+    std::vector<uint8_t> buf(sizeof(AttributeListEntryHeader) * 2 + 16, 0);
+
+    // Entry 1: $FILE_NAME with name "test"
+    auto* e1 = reinterpret_cast<AttributeListEntryHeader*>(buf.data());
+    e1->attribute_type = 0x30;
+    e1->name_length = 4;
+    e1->name_offset = sizeof(AttributeListEntryHeader);
+    e1->record_length = static_cast<uint16_t>(sizeof(AttributeListEntryHeader) + 8);
+    e1->lowest_vcn = 0;
+    e1->file_reference_number = 1000;
+    e1->attribute_id = 1;
+    memcpy(buf.data() + sizeof(AttributeListEntryHeader), L"test", 8);
+
+    // Entry 2: $DATA unnamed
+    auto* e2 = reinterpret_cast<AttributeListEntryHeader*>(buf.data() + e1->record_length);
+    e2->attribute_type = 0x80;
+    e2->name_length = 0;
+    e2->name_offset = 0;
+    e2->record_length = static_cast<uint16_t>(sizeof(AttributeListEntryHeader));
+    e2->lowest_vcn = 1024;
+    e2->file_reference_number = 1001;
+    e2->attribute_id = 2;
+
+    const size_t total_len = e1->record_length + e2->record_length;
+    auto entries = AttrListDecoder::decode(buf.data(), total_len);
+
+    check(entries.size() == 2, "decoded exactly 2 attribute list entries");
+    check(entries[0].attribute_type == 0x30, "entry 0 type is 0x30");
+    check(entries[0].type_name == L"$FILE_NAME", "entry 0 type name is $FILE_NAME");
+    check(entries[0].attribute_name == L"test", "entry 0 name is test");
+    check(entries[0].child_record_frn == 1000, "entry 0 child FRN is 1000");
+
+    check(entries[1].attribute_type == 0x80, "entry 1 type is 0x80");
+    check(entries[1].type_name == L"$DATA", "entry 1 type name is $DATA");
+    check(entries[1].lowest_vcn == 1024, "entry 1 lowest VCN is 1024");
+    check(entries[1].child_record_frn == 1001, "entry 1 child FRN is 1001");
+
+    std::wstring fmt = AttrListDecoder::format_entry(entries[0]);
+    check(fmt.find(L"$FILE_NAME") != std::wstring::npos, "format_entry contains $FILE_NAME");
+    check(fmt.find(L"1000") != std::wstring::npos, "format_entry contains child FRN");
+}
+
+static void test_logfile_analyzer() {
+    std::vector<uint8_t> page(4096, 0);
+
+    auto* header = reinterpret_cast<LogFileRestartPageHeader*>(page.data());
+    header->magic = kLogFileMagicRstr;
+    header->update_sequence_offset = 32;
+    header->update_sequence_size = 9; // 1 tag + 8 sectors
+    header->system_page_size = 4096;
+    header->log_page_size = 4096;
+    header->restart_area_offset = 64;
+    header->major_version = 1;
+    header->minor_version = 1;
+
+    // Set USA fixup tag and sector end markers
+    uint16_t usa_tag = 0xBEEF;
+    *reinterpret_cast<uint16_t*>(page.data() + 32) = usa_tag;
+    for (size_t s = 0; s < 8; ++s) {
+        size_t end_pos = (s + 1) * 512 - 2;
+        *reinterpret_cast<uint16_t*>(page.data() + end_pos) = usa_tag;
+    }
+
+    auto* area = reinterpret_cast<LogFileRestartArea*>(page.data() + 64);
+    area->current_lsn = 0x1234567890ABCDEFULL;
+    area->log_clients = 1;
+    area->flags = kLogFileCleanShutdown;
+    area->file_size = 64 * 1024 * 1024;
+    area->restart_open_log_count = 5;
+
+    auto res = LogFileAnalyzer::analyze_from_page(page.data(), 4096, L'C');
+    check(res.ok(), "analyze_from_page ok");
+    const auto& r = res.value();
+
+    check(r.is_valid_rstr, "is_valid_rstr is true");
+    check(r.is_clean_shutdown, "is_clean_shutdown is true");
+    check(r.major_version == 1, "major version is 1");
+    check(r.minor_version == 1, "minor version is 1");
+    check(r.current_lsn == 0x1234567890ABCDEFULL, "current_lsn matches");
+    check(r.file_size == 67108864, "file_size is 64MB");
+    check(r.log_clients == 1, "log_clients is 1");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -858,6 +944,12 @@ int main() {
     std::wcout << L"[RUN] test_bitmap_analyzer\n";
     test_bitmap_analyzer();
 
-    std::wcout << L"All 26 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_attr_list_decoder\n";
+    test_attr_list_decoder();
+
+    std::wcout << L"[RUN] test_logfile_analyzer\n";
+    test_logfile_analyzer();
+
+    std::wcout << L"All 28 unit test suites passed successfully.\n";
     return 0;
 }

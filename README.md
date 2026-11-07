@@ -21,6 +21,8 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **Raw Cluster File Carving & Deleted Recovery**: Directly streams and extracts file contents from raw disk clusters or resident MFT payloads for any FRN (`--carve <FRN> --out <path>`), supporting Alternate Data Streams (`--stream <name>`), cluster slack extraction (`--include-slack`), and batch deleted file recovery (`--carve-deleted <dir>`).
 - **Core NTFS System Metadata Files Explorer**: Audits all reserved system records (FRN 0 to 11: `$MFT`, `$MFTMirr`, `$LogFile`, `$Volume`, `$AttrDef`, root directory, `$Bitmap`, `$Boot`, `$BadClus`, `$Secure`, `$UpCase`, `$Extend`), displaying version, dirty state, allocated sizes, and bad cluster counts (`--system`, `--meta`).
 - **Cluster Allocation & Free-Space Fragmentation Map**: Analyzes the volume cluster allocation bitmap, computing contiguous free extent counts, largest contiguous block, average extent length, free space fragmentation index, and an ASCII cluster allocation map (`--bitmap`, `--free-space`).
+- **NTFS Transaction Journal ($LogFile) Analyzer**: Parses the restart page header (`RSTR`), validating USA fixups, LSN checkpoint tracking, active client lists, and clean vs dirty unmount states (`--logfile`, `--journal`).
+- **Multi-Record Attribute List Decoder**: Decodes `$ATTRIBUTE_LIST` (0x20) mappings to track attributes spanning across multiple base and child MFT record segments for fragmented files and extensive streams.
 - **Directory Index B-Tree Walker & Slack Carver**: Decodes `$INDEX_ROOT` and `$INDEX_ALLOCATION` nodes to list directory contents directly from internal B-Trees (`--ls <dir_FRN>`) and carves residual deleted index entries from index slack space.
 - **Low-Level Record Inspector**: Decodes raw resident and non-resident attributes, tests fixup integrity, and outputs formatted 16-byte aligned hexadecimal and ASCII previews (`--inspect <FRN>`).
 - **Real-Time Change Monitor**: Reads live filesystem operations via `FSCTL_READ_USN_JOURNAL` (`--watch`), showing creations, deletions, renames, and writes as they happen.
@@ -90,6 +92,9 @@ Analysis & Views:
   --stream <name>          Alternate Data Stream name to carve (default: unnamed $DATA)
   --carve-deleted <dir>    Carve all deleted files on volume to directory
   --include-slack          Include cluster slack bytes when carving
+  --system, --meta         Inspect core NTFS system metadata files ($MFT, $Volume, $Bitmap)
+  --bitmap, --free-space   Analyze volume cluster allocation and free-space fragmentation map
+  --logfile, --journal     Inspect NTFS transaction journal ($LogFile) restart area and health
   --ls <dir_FRN>           List directory index contents and carved slack from $INDEX_ROOT
   --watch                  Live monitor real-time volume changes via USN Journal
   --top [N]                List top N largest files (default: 20)
@@ -173,6 +178,9 @@ mftscan D: --system
 
 # Analyze cluster allocation and display ASCII volume block map
 mftscan D: --bitmap
+
+# Inspect NTFS transaction journal ($LogFile) restart area and volume unmount state
+mftscan D: --logfile
 
 # Export all executables to JSON
 mftscan D: --ext "exe,dll" --json > binaries.json

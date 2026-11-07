@@ -140,6 +140,10 @@ Result<RecordDumpReport> RecordInspector::inspect(VolumeReader& volume, uint64_t
             if (attr->resident.value_offset + attr->resident.value_length <= attr->record_length) {
                 const uint8_t* payload = parse_buf + offset + attr->resident.value_offset;
                 detail.hex_preview = format_hex_dump(payload, attr->resident.value_length, 48);
+
+                if (attr->type_code == kAttrAttributeList) {
+                    detail.attr_list_entries = AttrListDecoder::decode(payload, attr->resident.value_length);
+                }
             }
         } else {
             detail.content_size = attr->non_resident.real_size;
@@ -190,6 +194,13 @@ void RecordInspector::print_report(const RecordDumpReport& report) {
             std::string line;
             while (std::getline(stream, line)) {
                 std::wcout << L"        " << std::wstring(line.begin(), line.end()) << L"\n";
+            }
+        }
+
+        if (!attr.attr_list_entries.empty()) {
+            std::wcout << L"      Attribute List Mappings (" << attr.attr_list_entries.size() << L" entries):\n";
+            for (const auto& ale : attr.attr_list_entries) {
+                std::wcout << L"        * " << AttrListDecoder::format_entry(ale) << L"\n";
             }
         }
         std::wcout << L"\n";

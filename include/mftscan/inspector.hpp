@@ -8,6 +8,7 @@
 #endif
 #include <windows.h>
 
+#include "mftscan/attr_list.hpp"
 #include "mftscan/common.hpp"
 #include "mftscan/volume.hpp"
 
@@ -26,6 +27,7 @@ struct AttributeDetail {
     uint64_t content_size{0};
     uint64_t allocated_size{0};
     std::string hex_preview;
+    std::vector<AttributeListEntryInfo> attr_list_entries;
 };
 
 struct RecordDumpReport {

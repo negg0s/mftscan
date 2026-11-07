@@ -8,7 +8,9 @@
 #include "mftscan/privileges.hpp"
 #include "mftscan/scanner.hpp"
 #include "mftscan/signature_verifier.hpp"
+#include "mftscan/attr_list.hpp"
 #include "mftscan/bitmap.hpp"
+#include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
 #include "mftscan/system_files.hpp"
 #include "mftscan/security_auditor.hpp"
@@ -82,6 +84,7 @@ static void print_help() {
     std::wcout << L"  --include-slack          Include cluster slack bytes when carving\n";
     std::wcout << L"  --system, --meta         Inspect core NTFS system metadata files ($MFT, $Volume, $Bitmap)\n";
     std::wcout << L"  --bitmap, --free-space   Analyze volume cluster allocation and free-space fragmentation map\n";
+    std::wcout << L"  --logfile, --journal     Inspect NTFS transaction journal ($LogFile) restart area and health\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -128,6 +131,7 @@ int wmain(int argc, wchar_t* argv[]) {
     bool mode_carve = false;
     bool mode_system = false;
     bool mode_bitmap = false;
+    bool mode_logfile = false;
     uint64_t carve_frn = 0;
     std::wstring carve_out_path;
     std::wstring carve_stream_name;
@@ -196,6 +200,8 @@ int wmain(int argc, wchar_t* argv[]) {
             mode_system = true;
         } else if (arg == L"--bitmap" || arg == L"--free-space") {
             mode_bitmap = true;
+        } else if (arg == L"--logfile" || arg == L"--journal") {
+            mode_logfile = true;
         } else if (arg == L"--carve-deleted") {
             mode_carve_deleted = true;
             if (i + 1 < argc) carve_deleted_dir = argv[++i];
@@ -346,6 +352,26 @@ int wmain(int argc, wchar_t* argv[]) {
         }
 
         Formatter::print_bitmap_report(bmp_res.value());
+        return 0;
+    }
+
+    // LogFile mode: Audit transaction journal restart area
+    if (mode_logfile) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        auto log_res = LogFileAnalyzer::analyze(vr);
+        if (!log_res) {
+            std::wcerr << L"Failed to analyze $LogFile: " << log_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        Formatter::print_logfile_report(log_res.value());
         return 0;
     }
 

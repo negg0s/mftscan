@@ -1,4 +1,5 @@
 #include "mftscan/formatter.hpp"
+#include "mftscan/ntfs_defs.hpp"
 
 #include <iomanip>
 #include <iostream>
@@ -472,6 +473,21 @@ void Formatter::print_bitmap_report(const BitmapReport& report) {
     std::string s = report.ascii_map;
     std::wstring ws(s.begin(), s.end());
     std::wcout << L"  " << ws << L"\n";
+    std::wcout << L"--------------------------------------------------------------------------------\n\n";
+}
+
+void Formatter::print_logfile_report(const LogFileReport& report) {
+    std::wcout << L"NTFS Transaction Journal ($LogFile) Restart Area Report (Volume " << report.volume_letter << L":)\n";
+    std::wcout << L"--------------------------------------------------------------------------------\n";
+    std::wcout << L"Header Magic:          " << (report.magic == kLogFileMagicRstr ? L"RSTR (Valid Restart Page)" : L"Invalid") << L"\n";
+    std::wcout << L"Log Version:           v" << report.major_version << L"." << report.minor_version << L"\n";
+    std::wcout << L"System / Log Page:     " << report.system_page_size << L" bytes / " << report.log_page_size << L" bytes\n";
+    std::wcout << L"Current LSN:           0x" << std::hex << std::uppercase << report.current_lsn << std::dec << L" (" << report.current_lsn << L")\n";
+    std::wcout << L"Active Clients:        " << report.log_clients << L"\n";
+    std::wcout << L"Journal File Size:     " << format_bytes(report.file_size) << L" (" << report.file_size << L" bytes)\n";
+    std::wcout << L"Log Open Count:        " << report.restart_open_log_count << L"\n";
+    std::wcout << L"Shutdown State:        " << (report.is_clean_shutdown ? L"Clean Unmount (0x0002)" : L"Dirty / Pending Recovery") << L"\n";
+    std::wcout << L"Status Note:           " << report.extra_notes << L"\n";
     std::wcout << L"--------------------------------------------------------------------------------\n\n";
 }
 
