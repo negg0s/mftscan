@@ -34,6 +34,8 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **MFT Record Sequence & Churn Auditor**: Analyzes 16-bit sequence numbers across all MFT records, computing file churn histograms, identifying heavy record re-allocation hotspots (browser caches, temporary files, build artifacts), and warning against sequence rollover risks (`--churn`, `--sequence-audit`).
 - **Central Security Descriptor Database ($Secure:$SDS) Auditor**: Decodes packed security descriptor streams in `$Secure` (FRN 9), inspecting unique owner SIDs, DACL access masks, and deduplication ratios, identifying orphaned security descriptors and files with unresolved security IDs (`--sds`, `--security-db`).
 - **Volume Information & Dirty State Auditor ($Volume)**: Decodes Record 3 (`$Volume`), inspecting volume label, NTFS version (e.g. 3.1), and filesystem flags including `VOLUME_IS_DIRTY`, `VOLUME_CHKDSK_RAN`, and `VOLUME_MODIFIED_BY_CHKDSK` to assess volume health (`--vol-info`, `--dirty`).
+- **Unicode Uppercase Table ($UpCase) Integrity & Collation Auditor**: Decodes Record 10 (`$UpCase`), auditing the 128 KB Unicode uppercase table for character mapping anomalies, ASCII consistency, and FNV-1a hash verification against standard Windows collation tables (`--upcase`).
+- **NTFS Extension Directory ($Extend) Subsystems Explorer**: Decodes Record 11 (`$Extend`), identifying and inspecting supplementary NTFS metadata subsystems including user quotas (`$Quota`), object IDs (`$ObjId`), change journaling (`$UsnJrnl`), reparse indexes (`$Reparse`), and transactional logs (`$RmMetadata`) (`--extend`).
 - **Cluster Allocation & Free-Space Fragmentation Map**: Analyzes the volume cluster allocation bitmap, computing contiguous free extent counts, largest contiguous block, average extent length, free space fragmentation index, and an ASCII cluster allocation map (`--bitmap`, `--free-space`).
 - **NTFS Transaction Journal ($LogFile) Analyzer**: Parses the restart page header (`RSTR`), validating USA fixups, LSN checkpoint tracking, active client lists, and clean vs dirty unmount states (`--logfile`, `--journal`).
 - **Multi-Record Attribute List Decoder**: Decodes `$ATTRIBUTE_LIST` (0x20) mappings to track attributes spanning across multiple base and child MFT record segments for fragmented files and extensive streams.
@@ -124,6 +126,8 @@ Analysis & Views:
   --churn, --sequence-audit Audit MFT record sequence numbers and churn distribution
   --sds, --security-db     Inspect NTFS security descriptor database ($Secure:$SDS)
   --vol-info, --dirty      Inspect volume integrity flags and dirty state ($Volume)
+  --upcase                 Inspect NTFS Unicode uppercase table ($UpCase) integrity
+  --extend                 Inspect NTFS extension directory ($Extend) metadata subsystems
   --ls <dir_FRN>           List directory index contents and carved slack from $INDEX_ROOT
   --watch                  Live monitor real-time volume changes via USN Journal
   --top [N]                List top N largest files (default: 20)
@@ -255,6 +259,12 @@ mftscan D: --sds
 
 # Inspect volume integrity flags and dirty state
 mftscan D: --vol-info
+
+# Audit NTFS Unicode uppercase table integrity and verify against standard collation
+mftscan D: --upcase
+
+# Inspect NTFS extension directory subsystems ($Quota, $ObjId, $UsnJrnl, $Reparse)
+mftscan D: --extend
 
 # Export all executables to JSON
 mftscan D: --ext "exe,dll" --json > binaries.json

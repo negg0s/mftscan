@@ -59,6 +59,7 @@ add_library(mftscan_core STATIC
     include/mftscan/density.hpp
     include/mftscan/disk_usage.hpp
     include/mftscan/duplicate_detector.hpp
+    include/mftscan/extend.hpp
     include/mftscan/extended_attributes.hpp
     include/mftscan/formatter.hpp
     include/mftscan/fragmentation_analyzer.hpp
@@ -85,6 +86,7 @@ add_library(mftscan_core STATIC
     include/mftscan/thread_pool.hpp
     include/mftscan/timestomp.hpp
     include/mftscan/tui.hpp
+    include/mftscan/upcase.hpp
     include/mftscan/usn_journal.hpp
     include/mftscan/usn_monitor.hpp
     include/mftscan/volume.hpp
@@ -100,6 +102,7 @@ add_library(mftscan_core STATIC
     src/density.cpp
     src/disk_usage.cpp
     src/duplicate_detector.cpp
+    src/extend.cpp
     src/extended_attributes.cpp
     src/formatter.cpp
     src/fragmentation_analyzer.cpp
@@ -125,6 +128,7 @@ add_library(mftscan_core STATIC
     src/thread_pool.cpp
     src/timestomp.cpp
     src/tui.cpp
+    src/upcase.cpp
     src/usn_journal.cpp
     src/usn_monitor.cpp
     src/volume.cpp

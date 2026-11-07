@@ -24,6 +24,8 @@
 #include "mftscan/churn.hpp"
 #include "mftscan/secure.hpp"
 #include "mftscan/volume_info.hpp"
+#include "mftscan/upcase.hpp"
+#include "mftscan/extend.hpp"
 #include "mftscan/usn_journal.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
@@ -115,6 +117,8 @@ static void print_help() {
     std::wcout << L"  --churn, --sequence-audit Audit MFT record sequence numbers and churn distribution\n";
     std::wcout << L"  --sds, --security-db     Inspect NTFS security descriptor database ($Secure:$SDS)\n";
     std::wcout << L"  --vol-info, --dirty      Inspect volume integrity flags and dirty state ($Volume)\n";
+    std::wcout << L"  --upcase                 Inspect NTFS Unicode uppercase table ($UpCase) integrity\n";
+    std::wcout << L"  --extend                 Inspect NTFS extension directory ($Extend) metadata subsystems\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -180,6 +184,8 @@ int wmain(int argc, wchar_t* argv[]) {
     size_t churn_limit = 20;
     bool mode_sds = false;
     bool mode_volume_info = false;
+    bool mode_upcase = false;
+    bool mode_extend = false;
     uint64_t carve_frn = 0;
     std::wstring carve_out_path;
     std::wstring carve_stream_name;
@@ -289,6 +295,10 @@ int wmain(int argc, wchar_t* argv[]) {
             mode_sds = true;
         } else if (arg == L"--vol-info" || arg == L"--dirty") {
             mode_volume_info = true;
+        } else if (arg == L"--upcase") {
+            mode_upcase = true;
+        } else if (arg == L"--extend") {
+            mode_extend = true;
         } else if (arg == L"--carve-deleted") {
             mode_carve_deleted = true;
             if (i + 1 < argc) carve_deleted_dir = argv[++i];
@@ -539,6 +549,26 @@ int wmain(int argc, wchar_t* argv[]) {
         }
 
         Formatter::print_volume_info_report(vi_res.value());
+        return 0;
+    }
+
+    // UpCase mode: Direct $UpCase Unicode table integrity inspection
+    if (mode_upcase) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        auto up_res = UpCaseAnalyzer::inspect(vr);
+        if (!up_res) {
+            std::wcerr << L"Failed to inspect $UpCase: " << up_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        Formatter::print_upcase_report(up_res.value());
         return 0;
     }
 
@@ -849,6 +879,16 @@ int wmain(int argc, wchar_t* argv[]) {
                 Formatter::print_secure_report(sec_res.value());
             } else {
                 std::wcerr << L"Failed to inspect $Secure:$SDS: " << sec_res.error().to_string() << L"\n";
+            }
+        }
+    } else if (mode_extend) {
+        VolumeReader vr(drive_letter);
+        if (vr.open()) {
+            auto ext_res = ExtendAnalyzer::inspect(vr, records);
+            if (ext_res) {
+                Formatter::print_extend_report(ext_res.value());
+            } else {
+                std::wcerr << L"Failed to inspect $Extend: " << ext_res.error().to_string() << L"\n";
             }
         }
     } else if (mode_density) {

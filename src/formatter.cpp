@@ -684,6 +684,14 @@ void Formatter::print_volume_info_report(const VolumeInfoReport& report) {
     VolumeInfoAnalyzer::print_report(report);
 }
 
+void Formatter::print_upcase_report(const UpCaseReport& report) {
+    UpCaseAnalyzer::print_report(report);
+}
+
+void Formatter::print_extend_report(const ExtendReport& report) {
+    ExtendAnalyzer::print_report(report);
+}
+
 
 
 static std::string escape_json_string(const std::wstring& ws) {

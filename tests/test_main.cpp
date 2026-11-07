@@ -25,6 +25,8 @@
 #include "mftscan/churn.hpp"
 #include "mftscan/secure.hpp"
 #include "mftscan/volume_info.hpp"
+#include "mftscan/upcase.hpp"
+#include "mftscan/extend.hpp"
 #include "mftscan/usn_journal.hpp"
 #include <cstring>
 #include "mftscan/bitmap.hpp"
@@ -1546,6 +1548,98 @@ static void test_volume_info_analyzer() {
     check(rep.volume_creation_time == 133000000000000000ULL, "creation time matches");
 }
 
+static void test_upcase_analyzer() {
+    std::vector<wchar_t> chars(256);
+    for (size_t i = 0; i < 256; ++i) {
+        wchar_t c = static_cast<wchar_t>(i);
+        if (c >= L'a' && c <= L'z') {
+            chars[i] = static_cast<wchar_t>(c - (L'a' - L'A'));
+        } else {
+            chars[i] = c;
+        }
+    }
+
+    // Inject 1 anomaly at 'z'
+    chars[L'z'] = L'X';
+
+    const uint8_t* raw_bytes = reinterpret_cast<const uint8_t*>(chars.data());
+    const size_t raw_len = chars.size() * sizeof(wchar_t);
+
+    auto rep_anomaly = UpCaseAnalyzer::analyze_buffer(raw_bytes, raw_len, L'C');
+    check(rep_anomaly.valid, "rep_anomaly.valid is true");
+    check(rep_anomaly.character_count == 256, "rep_anomaly character count == 256");
+    check(!rep_anomaly.is_ascii_consistent, "rep_anomaly is_ascii_consistent is false");
+    check(rep_anomaly.ascii_mismatches_count == 1, "ascii_mismatches_count == 1");
+    check(rep_anomaly.anomalies.size() == 1, "anomalies count == 1");
+    check(rep_anomaly.anomalies[0].source_char == L'z', "anomaly source char is 'z'");
+    check(rep_anomaly.anomalies[0].mapped_char == L'X', "anomaly mapped char is 'X'");
+    check(rep_anomaly.anomalies[0].expected_char == L'Z', "anomaly expected char is 'Z'");
+
+    // Restore clean table
+    chars[L'z'] = L'Z';
+    auto rep_clean = UpCaseAnalyzer::analyze_buffer(raw_bytes, raw_len, L'C');
+    check(rep_clean.valid, "rep_clean.valid is true");
+    check(rep_clean.is_ascii_consistent, "rep_clean is_ascii_consistent is true");
+    check(rep_clean.ascii_mismatches_count == 0, "rep_clean mismatches == 0");
+    check(rep_clean.anomalies.empty(), "rep_clean anomalies is empty");
+    check(rep_clean.is_standard_table, "rep_clean is_standard_table is true");
+}
+
+static void test_extend_analyzer() {
+    std::vector<RecordInfo> records;
+
+    RecordInfo r1;
+    r1.record_index = 24;
+    r1.parent_record_index = 11;
+    r1.name = L"$Quota";
+    r1.size_bytes = 4096;
+    r1.allocated_bytes = 4096;
+    r1.ads_names = { L"$Q" };
+    records.push_back(r1);
+
+    RecordInfo r2;
+    r2.record_index = 25;
+    r2.parent_record_index = 11;
+    r2.name = L"$ObjId";
+    r2.size_bytes = 8192;
+    r2.allocated_bytes = 8192;
+    r2.ads_names = { L"$O" };
+    records.push_back(r2);
+
+    RecordInfo r3;
+    r3.record_index = 26;
+    r3.parent_record_index = 11;
+    r3.name = L"$UsnJrnl";
+    r3.size_bytes = 33554432;
+    r3.allocated_bytes = 33554432;
+    r3.ads_names = { L"$J", L"$MAX" };
+    records.push_back(r3);
+
+    RecordInfo r4;
+    r4.record_index = 27;
+    r4.parent_record_index = 11;
+    r4.name = L"$Reparse";
+    r4.size_bytes = 4096;
+    r4.allocated_bytes = 4096;
+    r4.ads_names = { L"$R" };
+    records.push_back(r4);
+
+    RecordInfo normal;
+    normal.record_index = 500;
+    normal.parent_record_index = 5;
+    normal.name = L"doc.txt";
+    records.push_back(normal);
+
+    auto rep = ExtendAnalyzer::analyze(records, L'D');
+    check(rep.valid, "rep.valid is true");
+    check(rep.total_subsystems == 4, "total_subsystems == 4");
+    check(rep.subsystems[0].name == L"$Quota", "subsystem 0 is $Quota");
+    check(rep.subsystems[0].purpose.find(L"quota") != std::wstring::npos, "subsystem 0 purpose contains quota");
+    check(rep.subsystems[2].name == L"$UsnJrnl", "subsystem 2 is $UsnJrnl");
+    check(rep.subsystems[2].stream_names.size() == 2, "subsystem 2 stream count == 2");
+    check(rep.total_metadata_bytes == 4096 + 8192 + 33554432 + 4096, "total_metadata_bytes matches sum");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -1669,6 +1763,12 @@ int main() {
     std::wcout << L"[RUN] test_volume_info_analyzer\n";
     test_volume_info_analyzer();
 
-    std::wcout << L"All 42 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_upcase_analyzer\n";
+    test_upcase_analyzer();
+
+    std::wcout << L"[RUN] test_extend_analyzer\n";
+    test_extend_analyzer();
+
+    std::wcout << L"All 44 unit test suites passed successfully.\n";
     return 0;
 }

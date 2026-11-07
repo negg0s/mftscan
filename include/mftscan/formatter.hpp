@@ -18,6 +18,7 @@
 #include "mftscan/density.hpp"
 #include "mftscan/disk_usage.hpp"
 #include "mftscan/duplicate_detector.hpp"
+#include "mftscan/extend.hpp"
 #include "mftscan/extended_attributes.hpp"
 #include "mftscan/fragmentation_analyzer.hpp"
 #include "mftscan/hardlink.hpp"
@@ -32,6 +33,7 @@
 #include "mftscan/sparse_slack_analyzer.hpp"
 #include "mftscan/system_files.hpp"
 #include "mftscan/timestomp.hpp"
+#include "mftscan/upcase.hpp"
 #include "mftscan/usn_journal.hpp"
 #include "mftscan/usn_monitor.hpp"
 #include "mftscan/volume_info.hpp"
@@ -79,6 +81,8 @@ public:
     static void print_churn_report(const ChurnReport& report);
     static void print_secure_report(const SecureDatabaseReport& report);
     static void print_volume_info_report(const VolumeInfoReport& report);
+    static void print_upcase_report(const UpCaseReport& report);
+    static void print_extend_report(const ExtendReport& report);
 
     static std::string to_json(
         const std::vector<RecordInfo>& records,
