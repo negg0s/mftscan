@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    name: Build (${{ matrix.arch }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            cmake_arch: x64
+            run_tests: true
+          - arch: arm64
+            cmake_arch: ARM64
+            run_tests: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+
+      - name: Verify build reproducibility (x64)
+        if: matrix.arch == 'x64'
+        shell: powershell
+        run: |
+          cmake -B build_repro1 -DCMAKE_BUILD_TYPE=Release -A x64
+          cmake --build build_repro1 --config Release --target mftscan
+          cmake -B build_repro2 -DCMAKE_BUILD_TYPE=Release -A x64
+          cmake --build build_repro2 --config Release --target mftscan
+          $hash1 = (Get-FileHash build_repro1/Release/mftscan.exe).Hash
+          $hash2 = (Get-FileHash build_repro2/Release/mftscan.exe).Hash
+          Write-Host "Build 1 Hash: $hash1"
+          Write-Host "Build 2 Hash: $hash2"
+          if ($hash1 -ne $hash2) {
+            Write-Error "Reproducibility check failed: hashes do not match"
+            exit 1
+          }
+          Write-Host "Reproducibility check passed: identical hashes"
+          Remove-Item -Recurse -Force build_repro1, build_repro2
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -A ${{ matrix.cmake_arch }}
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run Tests
+        if: matrix.run_tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Create release zip
+        shell: powershell
+        run: |
+          $staging = "mftscan-${{ matrix.arch }}"
+          New-Item -ItemType Directory -Path $staging
+          Copy-Item "build/Release/mftscan.exe" -Destination "$staging/mftscan.exe"
+          Copy-Item "README.md", "LICENSE", "CHANGELOG.md" -Destination $staging
+          Compress-Archive -Path "$staging/*" -DestinationPath "mftscan-${{ matrix.arch }}.zip"
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mftscan-${{ matrix.arch }}
+          path: mftscan-${{ matrix.arch }}.zip
