@@ -15,6 +15,8 @@
 #include "mftscan/reparse.hpp"
 #include "mftscan/density.hpp"
 #include "mftscan/mft_slack.hpp"
+#include "mftscan/extended_attributes.hpp"
+#include "mftscan/object_id.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
 #include "mftscan/system_files.hpp"
@@ -94,6 +96,8 @@ static void print_help() {
     std::wcout << L"  --reparse, --symlinks    List directory junctions, symbolic links, and reparse points\n";
     std::wcout << L"  --mft-slack <FRN>        Inspect MFT record slack space forensics and residual strings\n";
     std::wcout << L"  --density, --efficiency  Audit storage density, resident MFT files, and packing efficiency\n";
+    std::wcout << L"  --objid, --object-ids    Inspect NTFS Object Identifiers and track cross-volume file migration\n";
+    std::wcout << L"  --ea                     Inspect Extended Attributes ($EA) and WSL Linux metadata\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -146,6 +150,8 @@ int wmain(int argc, wchar_t* argv[]) {
     bool mode_mft_slack = false;
     uint64_t mft_slack_frn = 0;
     bool mode_density = false;
+    bool mode_objid = false;
+    bool mode_ea = false;
     uint64_t carve_frn = 0;
     std::wstring carve_out_path;
     std::wstring carve_stream_name;
@@ -227,6 +233,10 @@ int wmain(int argc, wchar_t* argv[]) {
             }
         } else if (arg == L"--density" || arg == L"--efficiency") {
             mode_density = true;
+        } else if (arg == L"--objid" || arg == L"--object-ids") {
+            mode_objid = true;
+        } else if (arg == L"--ea") {
+            mode_ea = true;
         } else if (arg == L"--carve-deleted") {
             mode_carve_deleted = true;
             if (i + 1 < argc) carve_deleted_dir = argv[++i];
@@ -672,6 +682,86 @@ int wmain(int argc, wchar_t* argv[]) {
     } else if (mode_density) {
         auto density_rep = DensityAnalyzer::analyze(records, geom.bytes_per_cluster);
         Formatter::print_density_report(density_rep);
+    } else if (mode_objid) {
+        VolumeReader vr(drive_letter);
+        vr.open();
+        std::vector<ObjectIdInfo> objid_list;
+        const uint32_t rec_size = vr.is_open() ? vr.geometry().bytes_per_record : 1024;
+        std::vector<uint8_t> rec_buf(rec_size);
+
+        for (const auto& r : records) {
+            if (vr.is_open()) {
+                auto read_res = vr.read_file_record(r.record_index, rec_buf.data(), rec_size);
+                if (read_res) {
+                    RecordParser::apply_fixup(rec_buf.data(), rec_size, vr.geometry().bytes_per_sector);
+                    const auto* mft_hdr = reinterpret_cast<const MftRecordHeader*>(rec_buf.data());
+                    uint32_t offset = mft_hdr->first_attribute_offset;
+                    while (offset + sizeof(AttributeRecordHeader) <= rec_size) {
+                        const auto* attr = reinterpret_cast<const AttributeRecordHeader*>(rec_buf.data() + offset);
+                        if (attr->type_code == kAttrEnd || attr->record_length == 0) break;
+                        if (offset + attr->record_length > rec_size) break;
+
+                        if (attr->type_code == kAttrObjectId && attr->non_resident_flag == 0) {
+                            const uint16_t v_off = attr->resident.value_offset;
+                            const uint32_t v_len = attr->resident.value_length;
+                            if (v_off + v_len <= attr->record_length) {
+                                auto o_res = ObjectIdAnalyzer::parse_attribute(
+                                    rec_buf.data() + offset + v_off,
+                                    v_len,
+                                    r.record_index,
+                                    r.full_path.empty() ? r.name : r.full_path
+                                );
+                                if (o_res) {
+                                    objid_list.push_back(o_res.value());
+                                }
+                            }
+                        }
+                        offset += attr->record_length;
+                    }
+                }
+            }
+        }
+        Formatter::print_object_id_report(objid_list);
+    } else if (mode_ea) {
+        VolumeReader vr(drive_letter);
+        vr.open();
+        std::vector<FileEaReport> ea_list;
+        const uint32_t rec_size = vr.is_open() ? vr.geometry().bytes_per_record : 1024;
+        std::vector<uint8_t> rec_buf(rec_size);
+
+        for (const auto& r : records) {
+            if (vr.is_open()) {
+                auto read_res = vr.read_file_record(r.record_index, rec_buf.data(), rec_size);
+                if (read_res) {
+                    RecordParser::apply_fixup(rec_buf.data(), rec_size, vr.geometry().bytes_per_sector);
+                    const auto* mft_hdr = reinterpret_cast<const MftRecordHeader*>(rec_buf.data());
+                    uint32_t offset = mft_hdr->first_attribute_offset;
+                    while (offset + sizeof(AttributeRecordHeader) <= rec_size) {
+                        const auto* attr = reinterpret_cast<const AttributeRecordHeader*>(rec_buf.data() + offset);
+                        if (attr->type_code == kAttrEnd || attr->record_length == 0) break;
+                        if (offset + attr->record_length > rec_size) break;
+
+                        if (attr->type_code == 0xE0 && attr->non_resident_flag == 0) { // $EA
+                            const uint16_t v_off = attr->resident.value_offset;
+                            const uint32_t v_len = attr->resident.value_length;
+                            if (v_off + v_len <= attr->record_length) {
+                                auto ea_res = ExtendedAttributesAnalyzer::parse_ea_stream(
+                                    rec_buf.data() + offset + v_off,
+                                    v_len,
+                                    r.record_index,
+                                    r.full_path.empty() ? r.name : r.full_path
+                                );
+                                if (ea_res) {
+                                    ea_list.push_back(ea_res.value());
+                                }
+                            }
+                        }
+                        offset += attr->record_length;
+                    }
+                }
+            }
+        }
+        Formatter::print_ea_report(ea_list);
     } else {
         Formatter::print_results_table(records, display_limit);
     }

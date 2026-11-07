@@ -577,6 +577,52 @@ void Formatter::print_density_report(const DensityReport& report) {
     DensityAnalyzer::print_report(report);
 }
 
+void Formatter::print_object_id_report(const std::vector<ObjectIdInfo>& list) {
+    std::wcout << L"NTFS Object Identifiers & Provenance Tracking (" << list.size() << L" files found)\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+    std::wcout << std::left
+               << std::setw(8)  << L"FRN"
+               << std::setw(40) << L"Object ID GUID"
+               << std::setw(12) << L"Status"
+               << L"Path / Birth Object ID\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+
+    for (const auto& item : list) {
+        std::wcout << std::left
+                   << std::setw(8)  << item.frn
+                   << std::setw(40) << item.object_id_str
+                   << std::setw(12) << (item.is_migrated ? L"[MIGRATED]" : (item.has_birth_data ? L"Origin" : L"Basic"))
+                   << item.path << L"\n";
+        if (item.is_migrated && !item.birth_object_id_str.empty()) {
+            std::wcout << L"         \\-> Birth Object ID : " << item.birth_object_id_str << L"\n";
+            if (!item.birth_volume_id_str.empty()) {
+                std::wcout << L"         \\-> Birth Volume ID : " << item.birth_volume_id_str << L"\n";
+            }
+        }
+    }
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
+}
+
+void Formatter::print_ea_report(const std::vector<FileEaReport>& list) {
+    std::wcout << L"NTFS Extended Attributes & Subsystem Metadata (" << list.size() << L" files found)\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+    for (const auto& r : list) {
+        std::wcout << L"  FRN " << r.frn << L" (" << (r.has_wsl_metadata ? L"WSL Linux Metadata" : L"Extended Attributes")
+                   << L", " << r.packed_ea_size << L" bytes packed, " << r.attributes.size() << L" entries): " << r.path << L"\n";
+        for (const auto& a : r.attributes) {
+            std::wcout << L"    * [" << std::wstring(a.name.begin(), a.name.end()) << L"] "
+                       << (a.is_wsl_attribute ? L"(WSL) " : L"")
+                       << L"Size: " << a.value_length << L" bytes";
+            if (!a.value_preview.empty()) {
+                std::wcout << L" -> " << std::wstring(a.value_preview.begin(), a.value_preview.end());
+            }
+            std::wcout << L"\n";
+        }
+        std::wcout << L"\n";
+    }
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
+}
+
 
 static std::string escape_json_string(const std::wstring& ws) {
     std::ostringstream oss;

@@ -16,6 +16,8 @@
 #include "mftscan/reparse.hpp"
 #include "mftscan/density.hpp"
 #include "mftscan/mft_slack.hpp"
+#include "mftscan/extended_attributes.hpp"
+#include "mftscan/object_id.hpp"
 #include <cstring>
 #include "mftscan/bitmap.hpp"
 #include "mftscan/logfile.hpp"
@@ -1049,6 +1051,76 @@ static void test_density_analyzer() {
     check(report.buckets.size() == 9, "9 size buckets present");
 }
 
+static void test_object_id_analyzer() {
+    std::vector<uint8_t> payload(64, 0);
+
+    // Object ID
+    payload[0] = 0xAA;
+    payload[15] = 0x11;
+
+    // Birth Volume ID
+    payload[16] = 0xBB;
+    payload[31] = 0x22;
+
+    // Birth Object ID (distinct from Object ID)
+    payload[32] = 0xCC;
+    payload[47] = 0x33;
+
+    auto res = ObjectIdAnalyzer::parse_attribute(payload.data(), 64, 2048, L"C:\\Data\\Migrated.doc");
+    check(res.ok(), "parse_attribute object_id ok");
+    const auto& info = res.value();
+
+    check(info.frn == 2048, "frn matches");
+    check(info.has_birth_data, "has_birth_data is true");
+    check(info.is_migrated, "is_migrated is true (object_id != birth_object_id)");
+    check(!info.object_id_str.empty(), "object_id_str not empty");
+    check(!info.birth_object_id_str.empty(), "birth_object_id_str not empty");
+    check(info.object_id_str != info.birth_object_id_str, "object_id differs from birth_object_id");
+}
+
+static void test_extended_attributes_analyzer() {
+    // Construct 2 packed EA records
+    std::string name1 = "LXATTRB";
+    std::string name2 = "UserComment";
+    std::string val2 = "TagData";
+
+    const size_t e1_aligned = 24; // 4-byte aligned
+    const size_t e2_len = 8 + name2.size() + 1 + val2.size(); // 8 hdr + 11 name + 1 null + 7 val = 27
+
+    std::vector<uint8_t> ea_buf(e1_aligned + e2_len + 4, 0);
+
+    // Entry 1
+    *reinterpret_cast<uint32_t*>(ea_buf.data()) = static_cast<uint32_t>(e1_aligned); // next_entry_offset
+    ea_buf[4] = 0; // flags
+    ea_buf[5] = static_cast<uint8_t>(name1.size()); // ea_name_length
+    *reinterpret_cast<uint16_t*>(ea_buf.data() + 6) = 4; // ea_value_length
+    memcpy(ea_buf.data() + 8, name1.data(), name1.size());
+    ea_buf[8 + name1.size()] = 0; // null terminator
+    ea_buf[8 + name1.size() + 1] = 0x01; // val byte
+
+    // Entry 2
+    uint8_t* e2_ptr = ea_buf.data() + e1_aligned;
+    *reinterpret_cast<uint32_t*>(e2_ptr) = 0; // last entry
+    e2_ptr[4] = 0x80; // NEED_EA flag
+    e2_ptr[5] = static_cast<uint8_t>(name2.size());
+    *reinterpret_cast<uint16_t*>(e2_ptr + 6) = static_cast<uint16_t>(val2.size());
+    memcpy(e2_ptr + 8, name2.data(), name2.size());
+    e2_ptr[8 + name2.size()] = 0; // null terminator
+    memcpy(e2_ptr + 8 + name2.size() + 1, val2.data(), val2.size());
+
+    auto res = ExtendedAttributesAnalyzer::parse_ea_stream(ea_buf.data(), e1_aligned + e2_len, 3000, L"C:\\WSL\\file");
+    check(res.ok(), "parse_ea_stream ok");
+    const auto& rep = res.value();
+
+    check(rep.frn == 3000, "frn matches");
+    check(rep.attributes.size() == 2, "2 EA items parsed");
+    check(rep.has_wsl_metadata, "has_wsl_metadata is true for LXATTRB");
+    check(rep.need_ea_count == 1, "need_ea_count == 1");
+    check(rep.attributes[0].is_wsl_attribute, "entry 1 is_wsl_attribute");
+    check(rep.attributes[1].is_need_ea, "entry 2 is_need_ea");
+    check(rep.attributes[1].value_preview == "TagData", "entry 2 value preview matches");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -1144,7 +1216,12 @@ int main() {
 
     std::wcout << L"[RUN] test_density_analyzer\n";
     test_density_analyzer();
+    std::wcout << L"[RUN] test_object_id_analyzer\n";
+    test_object_id_analyzer();
 
-    std::wcout << L"All 32 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_extended_attributes_analyzer\n";
+    test_extended_attributes_analyzer();
+
+    std::wcout << L"All 34 unit test suites passed successfully.\n";
     return 0;
 }

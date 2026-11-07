@@ -15,9 +15,11 @@
 #include "mftscan/density.hpp"
 #include "mftscan/disk_usage.hpp"
 #include "mftscan/duplicate_detector.hpp"
+#include "mftscan/extended_attributes.hpp"
 #include "mftscan/fragmentation_analyzer.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/mft_slack.hpp"
+#include "mftscan/object_id.hpp"
 #include "mftscan/reparse.hpp"
 #include "mftscan/security_auditor.hpp"
 #include "mftscan/signature_verifier.hpp"
@@ -58,6 +60,8 @@ public:
     static void print_reparse_report(const std::vector<ReparseInfo>& list);
     static void print_mft_slack_report(const MftSlackReport& report);
     static void print_density_report(const DensityReport& report);
+    static void print_object_id_report(const std::vector<ObjectIdInfo>& list);
+    static void print_ea_report(const std::vector<FileEaReport>& list);
 
     static std::string to_json(
         const std::vector<RecordInfo>& records,

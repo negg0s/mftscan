@@ -56,6 +56,7 @@ add_library(mftscan_core STATIC
     include/mftscan/density.hpp
     include/mftscan/disk_usage.hpp
     include/mftscan/duplicate_detector.hpp
+    include/mftscan/extended_attributes.hpp
     include/mftscan/formatter.hpp
     include/mftscan/fragmentation_analyzer.hpp
     include/mftscan/index_parser.hpp
@@ -63,6 +64,7 @@ add_library(mftscan_core STATIC
     include/mftscan/logfile.hpp
     include/mftscan/mft_slack.hpp
     include/mftscan/ntfs_defs.hpp
+    include/mftscan/object_id.hpp
     include/mftscan/path_builder.hpp
     include/mftscan/privileges.hpp
     include/mftscan/query.hpp
@@ -87,12 +89,14 @@ add_library(mftscan_core STATIC
     src/density.cpp
     src/disk_usage.cpp
     src/duplicate_detector.cpp
+    src/extended_attributes.cpp
     src/formatter.cpp
     src/fragmentation_analyzer.cpp
     src/index_parser.cpp
     src/inspector.cpp
     src/logfile.cpp
     src/mft_slack.cpp
+    src/object_id.cpp
     src/path_builder.cpp
     src/privileges.cpp
     src/query.cpp

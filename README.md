@@ -24,6 +24,8 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **Reparse Points & Directory Junctions**: Decodes `$REPARSE_POINT` (0xC0) structures for Directory Junctions, Symbolic Links, Compact OS compression, and cloud placeholders, verifying broken link targets (`--reparse`, `--symlinks`).
 - **MFT Record Slack Space Forensics**: Extracts residual ASCII/UTF-16 strings and residual attribute headers left behind in unallocated MFT record slack bytes (`--mft-slack <FRN>`).
 - **NTFS Storage Density & Packing Efficiency Audit**: Calculates resident file ratios, cluster slack saved via resident MFT inlining, payload efficiency percentages, and file size distribution histograms (`--density`, `--efficiency`).
+- **NTFS Object Identifier & Provenance Tracker**: Decodes 128-bit GUIDs in `$OBJECT_ID` (0x40), detecting cross-volume file migrations by comparing current Object ID with original birth volume and birth object identifiers (`--objid`, `--object-ids`).
+- **Extended Attributes & Subsystem Metadata**: Decodes packed `$EA` (0xE0) records, discovering POSIX mode, UID, and GID attributes used by Windows Subsystem for Linux (WSL) and custom extended attributes (`--ea`).
 - **Cluster Allocation & Free-Space Fragmentation Map**: Analyzes the volume cluster allocation bitmap, computing contiguous free extent counts, largest contiguous block, average extent length, free space fragmentation index, and an ASCII cluster allocation map (`--bitmap`, `--free-space`).
 - **NTFS Transaction Journal ($LogFile) Analyzer**: Parses the restart page header (`RSTR`), validating USA fixups, LSN checkpoint tracking, active client lists, and clean vs dirty unmount states (`--logfile`, `--journal`).
 - **Multi-Record Attribute List Decoder**: Decodes `$ATTRIBUTE_LIST` (0x20) mappings to track attributes spanning across multiple base and child MFT record segments for fragmented files and extensive streams.
@@ -103,6 +105,8 @@ Analysis & Views:
   --reparse, --symlinks    List directory junctions, symbolic links, and reparse points
   --mft-slack <FRN>        Inspect MFT record slack space forensics and residual strings
   --density, --efficiency  Audit storage density, resident MFT files, and packing efficiency
+  --objid, --object-ids    Inspect NTFS Object Identifiers and track cross-volume file migration
+  --ea                     Inspect Extended Attributes ($EA) and WSL Linux metadata
   --ls <dir_FRN>           List directory index contents and carved slack from $INDEX_ROOT
   --watch                  Live monitor real-time volume changes via USN Journal
   --top [N]                List top N largest files (default: 20)
@@ -201,6 +205,12 @@ mftscan D: --mft-slack 12345
 
 # Audit storage density, resident MFT file savings, and size distributions
 mftscan D: --density
+
+# Audit NTFS Object Identifiers and track cross-volume file migrations
+mftscan D: --objid
+
+# Inspect Extended Attributes and WSL Linux metadata
+mftscan D: --ea
 
 # Export all executables to JSON
 mftscan D: --ext "exe,dll" --json > binaries.json
