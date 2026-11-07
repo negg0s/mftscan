@@ -623,6 +623,44 @@ void Formatter::print_ea_report(const std::vector<FileEaReport>& list) {
     std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
 }
 
+void Formatter::print_hardlink_report(const HardLinkReport& report) {
+    std::wcout << L"NTFS Hard Link Forensics & Space Savings (" << report.total_multi_link_files << L" multi-link files, "
+               << report.total_link_references << L" link references)\n";
+    std::wcout << L"Total Disk Allocation Saved: " << format_bytes(report.total_space_saved_bytes) << L"\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+    std::wcout << std::left
+               << std::setw(8)  << L"FRN"
+               << std::setw(8)  << L"Links"
+               << std::setw(14) << L"File Size"
+               << std::setw(14) << L"Space Saved"
+               << L"Primary Path / Sibling Names\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+
+    for (const auto& g : report.groups) {
+        std::wcout << std::left
+                   << std::setw(8)  << g.frn
+                   << std::setw(8)  << g.hard_link_count
+                   << std::setw(14) << format_bytes(g.size_bytes)
+                   << std::setw(14) << format_bytes(g.saved_bytes)
+                   << g.primary_path << L"\n";
+        for (const auto& n : g.names) {
+            if (n != g.primary_path) {
+                std::wcout << L"         \\-> Link alias: " << n << L"\n";
+            }
+        }
+    }
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
+}
+
+void Formatter::print_usn_stats(const UsnJournalStats& stats) {
+    UsnJournalAnalyzer::print_stats_report(stats);
+}
+
+void Formatter::print_usn_history(const UsnHistoryReport& report) {
+    UsnJournalAnalyzer::print_history_report(report);
+}
+
+
 
 static std::string escape_json_string(const std::wstring& ws) {
     std::ostringstream oss;

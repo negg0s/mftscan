@@ -17,6 +17,7 @@
 #include "mftscan/duplicate_detector.hpp"
 #include "mftscan/extended_attributes.hpp"
 #include "mftscan/fragmentation_analyzer.hpp"
+#include "mftscan/hardlink.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/mft_slack.hpp"
 #include "mftscan/object_id.hpp"
@@ -26,6 +27,7 @@
 #include "mftscan/sparse_slack_analyzer.hpp"
 #include "mftscan/system_files.hpp"
 #include "mftscan/timestomp.hpp"
+#include "mftscan/usn_journal.hpp"
 #include "mftscan/usn_monitor.hpp"
 
 #include <string>
@@ -62,6 +64,9 @@ public:
     static void print_density_report(const DensityReport& report);
     static void print_object_id_report(const std::vector<ObjectIdInfo>& list);
     static void print_ea_report(const std::vector<FileEaReport>& list);
+    static void print_hardlink_report(const HardLinkReport& report);
+    static void print_usn_stats(const UsnJournalStats& stats);
+    static void print_usn_history(const UsnHistoryReport& report);
 
     static std::string to_json(
         const std::vector<RecordInfo>& records,

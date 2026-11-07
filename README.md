@@ -26,6 +26,8 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **NTFS Storage Density & Packing Efficiency Audit**: Calculates resident file ratios, cluster slack saved via resident MFT inlining, payload efficiency percentages, and file size distribution histograms (`--density`, `--efficiency`).
 - **NTFS Object Identifier & Provenance Tracker**: Decodes 128-bit GUIDs in `$OBJECT_ID` (0x40), detecting cross-volume file migrations by comparing current Object ID with original birth volume and birth object identifiers (`--objid`, `--object-ids`).
 - **Extended Attributes & Subsystem Metadata**: Decodes packed `$EA` (0xE0) records, discovering POSIX mode, UID, and GID attributes used by Windows Subsystem for Linux (WSL) and custom extended attributes (`--ea`).
+- **Hard Link Forensics & Space Savings Tracker**: Identifies multi-link files (`hard_link_count > 1`), groups sibling link aliases, and calculates volume-wide physical disk allocation saved (`--hardlinks`, `--links`).
+- **USN Journal Health & Event Timeline Forensics**: Inspects journal buffer capacity, allocation delta, and rollover percentage (`--usn-stats`), and extracts chronological operations history for any FRN (`--usn-history <FRN>`).
 - **Cluster Allocation & Free-Space Fragmentation Map**: Analyzes the volume cluster allocation bitmap, computing contiguous free extent counts, largest contiguous block, average extent length, free space fragmentation index, and an ASCII cluster allocation map (`--bitmap`, `--free-space`).
 - **NTFS Transaction Journal ($LogFile) Analyzer**: Parses the restart page header (`RSTR`), validating USA fixups, LSN checkpoint tracking, active client lists, and clean vs dirty unmount states (`--logfile`, `--journal`).
 - **Multi-Record Attribute List Decoder**: Decodes `$ATTRIBUTE_LIST` (0x20) mappings to track attributes spanning across multiple base and child MFT record segments for fragmented files and extensive streams.
@@ -107,6 +109,9 @@ Analysis & Views:
   --density, --efficiency  Audit storage density, resident MFT files, and packing efficiency
   --objid, --object-ids    Inspect NTFS Object Identifiers and track cross-volume file migration
   --ea                     Inspect Extended Attributes ($EA) and WSL Linux metadata
+  --hardlinks, --links     Audit NTFS hard links and calculate disk space saved
+  --usn-stats              Inspect USN Journal buffer capacity, delta, and rollover risk
+  --usn-history <FRN>      Extract chronological historical operations for FRN from USN Journal
   --ls <dir_FRN>           List directory index contents and carved slack from $INDEX_ROOT
   --watch                  Live monitor real-time volume changes via USN Journal
   --top [N]                List top N largest files (default: 20)
@@ -211,6 +216,15 @@ mftscan D: --objid
 
 # Inspect Extended Attributes and WSL Linux metadata
 mftscan D: --ea
+
+# Audit volume-wide hard links and calculate disk allocation savings
+mftscan D: --hardlinks
+
+# Inspect USN Journal buffer capacity, allocation delta, and rollover risk
+mftscan D: --usn-stats
+
+# Extract chronological modification history for record 12345 from USN Journal
+mftscan D: --usn-history 12345
 
 # Export all executables to JSON
 mftscan D: --ext "exe,dll" --json > binaries.json

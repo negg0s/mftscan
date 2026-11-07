@@ -74,6 +74,7 @@ std::optional<RecordInfo> RecordParser::parse_record(
     info.sequence_number = header->sequence_number;
     info.is_directory = (header->flags & kRecordDirectory) != 0;
     info.is_deleted = (header->flags & kRecordInUse) == 0;
+    info.hard_link_count = header->hard_link_count;
 
     // If this is an extension record (child segment), skip it as base record holds primary metadata
     if (header->base_file_record != 0) {
@@ -133,9 +134,14 @@ std::optional<RecordInfo> RecordParser::parse_record(
                         default: priority = 0; break;
                     }
 
+                    std::wstring current_fn(name_ptr, name_chars);
+                    if (fn_hdr->file_name_namespace != 2) {
+                        info.sibling_names.push_back(current_fn);
+                    }
+
                     if (priority > best_namespace_priority || info.name.empty()) {
                         best_namespace_priority = priority;
-                        info.name = std::wstring(name_ptr, name_chars);
+                        info.name = std::move(current_fn);
                         info.parent_record_index = extract_record_number(fn_hdr->parent_directory_ref);
                         info.fn_creation_time = fn_hdr->creation_time;
                         info.fn_modification_time = fn_hdr->modification_time;

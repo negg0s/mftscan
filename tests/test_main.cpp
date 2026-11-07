@@ -18,6 +18,8 @@
 #include "mftscan/mft_slack.hpp"
 #include "mftscan/extended_attributes.hpp"
 #include "mftscan/object_id.hpp"
+#include "mftscan/hardlink.hpp"
+#include "mftscan/usn_journal.hpp"
 #include <cstring>
 #include "mftscan/bitmap.hpp"
 #include "mftscan/logfile.hpp"
@@ -1121,6 +1123,62 @@ static void test_extended_attributes_analyzer() {
     check(rep.attributes[1].value_preview == "TagData", "entry 2 value preview matches");
 }
 
+static void test_hard_link_tracker() {
+    std::vector<RecordInfo> records;
+
+    RecordInfo r1;
+    r1.record_index = 500;
+    r1.hard_link_count = 3;
+    r1.size_bytes = 10000;
+    r1.allocated_bytes = 12288;
+    r1.full_path = L"C:\\Windows\\System32\\driver.sys";
+    r1.sibling_names = { L"driver.sys", L"driver_alias1.sys", L"driver_alias2.sys" };
+    records.push_back(r1);
+
+    RecordInfo r2;
+    r2.record_index = 501;
+    r2.hard_link_count = 1;
+    r2.size_bytes = 500;
+    r2.allocated_bytes = 4096;
+    records.push_back(r2);
+
+    RecordInfo d;
+    d.record_index = 5;
+    d.is_directory = true;
+    records.push_back(d);
+
+    auto rep = HardLinkTracker::analyze(records);
+    check(rep.total_multi_link_files == 1, "total_multi_link_files matches 1");
+    check(rep.total_link_references == 3, "total_link_references matches 3");
+    check(rep.total_space_saved_bytes == 24576, "total_space_saved_bytes matches 24576 (2 * 12288)");
+    check(!rep.groups.empty(), "groups not empty");
+    check(rep.groups[0].frn == 500, "group frn matches 500");
+    check(rep.groups[0].hard_link_count == 3, "group hard_link_count matches 3");
+    check(rep.groups[0].saved_bytes == 24576, "group saved_bytes matches 24576");
+    check(rep.groups[0].names.size() == 3, "group names count matches 3");
+}
+
+static void test_usn_journal_stats() {
+    UsnJournalStats s{};
+    s.journal_id = 0x1234567890ABCDEFULL;
+    s.lowest_valid_usn = 1000000;
+    s.next_usn = 5000000;
+    s.maximum_size = 33554432; // 32 MB
+    s.allocation_delta = 4194304; // 4 MB
+    s.max_usn = 100000000;
+
+    const uint64_t diff = s.next_usn - s.lowest_valid_usn;
+    s.estimated_active_size_mb = static_cast<double>(diff) / (1024.0 * 1024.0);
+    s.approximate_event_count = diff / 96;
+    s.utilization_percentage = (static_cast<double>(diff) / static_cast<double>(s.maximum_size)) * 100.0;
+    s.rollover_percentage = (static_cast<double>(s.next_usn) / static_cast<double>(s.max_usn)) * 100.0;
+
+    check(s.journal_id == 0x1234567890ABCDEFULL, "journal_id matches");
+    check(s.approximate_event_count == 4000000 / 96, "approximate_event_count matches");
+    check(s.rollover_percentage == 5.0, "rollover_percentage matches 5.0%");
+    check(s.utilization_percentage > 10.0 && s.utilization_percentage < 15.0, "utilization_percentage in expected range");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -1221,7 +1279,12 @@ int main() {
 
     std::wcout << L"[RUN] test_extended_attributes_analyzer\n";
     test_extended_attributes_analyzer();
+    std::wcout << L"[RUN] test_hard_link_tracker\n";
+    test_hard_link_tracker();
 
-    std::wcout << L"All 34 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_usn_journal_stats\n";
+    test_usn_journal_stats();
+
+    std::wcout << L"All 36 unit test suites passed successfully.\n";
     return 0;
 }

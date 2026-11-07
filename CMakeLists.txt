@@ -59,6 +59,7 @@ add_library(mftscan_core STATIC
     include/mftscan/extended_attributes.hpp
     include/mftscan/formatter.hpp
     include/mftscan/fragmentation_analyzer.hpp
+    include/mftscan/hardlink.hpp
     include/mftscan/index_parser.hpp
     include/mftscan/inspector.hpp
     include/mftscan/logfile.hpp
@@ -79,6 +80,7 @@ add_library(mftscan_core STATIC
     include/mftscan/thread_pool.hpp
     include/mftscan/timestomp.hpp
     include/mftscan/tui.hpp
+    include/mftscan/usn_journal.hpp
     include/mftscan/usn_monitor.hpp
     include/mftscan/volume.hpp
     src/attr_list.cpp
@@ -92,6 +94,7 @@ add_library(mftscan_core STATIC
     src/extended_attributes.cpp
     src/formatter.cpp
     src/fragmentation_analyzer.cpp
+    src/hardlink.cpp
     src/index_parser.cpp
     src/inspector.cpp
     src/logfile.cpp
@@ -111,6 +114,7 @@ add_library(mftscan_core STATIC
     src/thread_pool.cpp
     src/timestomp.cpp
     src/tui.cpp
+    src/usn_journal.cpp
     src/usn_monitor.cpp
     src/volume.cpp
 )

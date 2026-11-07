@@ -17,6 +17,8 @@
 #include "mftscan/mft_slack.hpp"
 #include "mftscan/extended_attributes.hpp"
 #include "mftscan/object_id.hpp"
+#include "mftscan/hardlink.hpp"
+#include "mftscan/usn_journal.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
 #include "mftscan/system_files.hpp"
@@ -98,6 +100,9 @@ static void print_help() {
     std::wcout << L"  --density, --efficiency  Audit storage density, resident MFT files, and packing efficiency\n";
     std::wcout << L"  --objid, --object-ids    Inspect NTFS Object Identifiers and track cross-volume file migration\n";
     std::wcout << L"  --ea                     Inspect Extended Attributes ($EA) and WSL Linux metadata\n";
+    std::wcout << L"  --hardlinks, --links     Audit NTFS hard links and calculate disk space saved\n";
+    std::wcout << L"  --usn-stats              Inspect USN Journal buffer capacity, delta, and rollover risk\n";
+    std::wcout << L"  --usn-history <FRN>      Extract chronological historical operations for FRN from USN Journal\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -152,6 +157,10 @@ int wmain(int argc, wchar_t* argv[]) {
     bool mode_density = false;
     bool mode_objid = false;
     bool mode_ea = false;
+    bool mode_hardlinks = false;
+    bool mode_usn_stats = false;
+    bool mode_usn_history = false;
+    uint64_t usn_history_frn = 0;
     uint64_t carve_frn = 0;
     std::wstring carve_out_path;
     std::wstring carve_stream_name;
@@ -237,6 +246,15 @@ int wmain(int argc, wchar_t* argv[]) {
             mode_objid = true;
         } else if (arg == L"--ea") {
             mode_ea = true;
+        } else if (arg == L"--hardlinks" || arg == L"--links") {
+            mode_hardlinks = true;
+        } else if (arg == L"--usn-stats") {
+            mode_usn_stats = true;
+        } else if (arg == L"--usn-history") {
+            mode_usn_history = true;
+            if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
+                usn_history_frn = _wcstoui64(argv[++i], nullptr, 10);
+            }
         } else if (arg == L"--carve-deleted") {
             mode_carve_deleted = true;
             if (i + 1 < argc) carve_deleted_dir = argv[++i];
@@ -427,6 +445,47 @@ int wmain(int argc, wchar_t* argv[]) {
         }
 
         Formatter::print_boot_sector_report(boot_res.value());
+        return 0;
+    }
+
+    // USN Stats mode: Direct journal metadata analysis
+    if (mode_usn_stats) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        auto stats_res = UsnJournalAnalyzer::query_stats(vr);
+        if (!stats_res) {
+            std::wcerr << L"Failed to query USN journal stats: " << stats_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        Formatter::print_usn_stats(stats_res.value());
+        return 0;
+    }
+
+    // USN History mode: Direct file event history extraction
+    if (mode_usn_history) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        std::wcout << L"Scanning USN journal for historical operations on FRN " << usn_history_frn << L"...\n";
+        auto hist_res = UsnJournalAnalyzer::extract_history(vr, usn_history_frn);
+        if (!hist_res) {
+            std::wcerr << L"Failed to extract USN history: " << hist_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        Formatter::print_usn_history(hist_res.value());
         return 0;
     }
 
@@ -679,6 +738,9 @@ int wmain(int argc, wchar_t* argv[]) {
     } else if (mode_types) {
         auto type_stats = DiskUsageAnalyzer::compute_extension_histogram(records, types_limit);
         Formatter::print_extension_histogram_table(type_stats);
+    } else if (mode_hardlinks) {
+        auto hl_report = HardLinkTracker::analyze(records);
+        Formatter::print_hardlink_report(hl_report);
     } else if (mode_density) {
         auto density_rep = DensityAnalyzer::analyze(records, geom.bytes_per_cluster);
         Formatter::print_density_report(density_rep);

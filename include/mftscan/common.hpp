@@ -39,6 +39,8 @@ struct RecordInfo {
     bool is_resident{false};
     std::vector<uint8_t> resident_magic;
     std::vector<std::wstring> ads_names;
+    uint16_t hard_link_count{1};
+    std::vector<std::wstring> sibling_names;
 };
 
 struct VolumeGeometry {
