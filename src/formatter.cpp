@@ -676,6 +676,14 @@ void Formatter::print_churn_report(const ChurnReport& report) {
     ChurnAnalyzer::print_report(report);
 }
 
+void Formatter::print_secure_report(const SecureDatabaseReport& report) {
+    SecureAnalyzer::print_report(report);
+}
+
+void Formatter::print_volume_info_report(const VolumeInfoReport& report) {
+    VolumeInfoAnalyzer::print_report(report);
+}
+
 
 
 static std::string escape_json_string(const std::wstring& ws) {

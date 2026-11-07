@@ -22,6 +22,8 @@
 #include "mftscan/quota.hpp"
 #include "mftscan/attrdef.hpp"
 #include "mftscan/churn.hpp"
+#include "mftscan/secure.hpp"
+#include "mftscan/volume_info.hpp"
 #include "mftscan/usn_journal.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
@@ -111,6 +113,8 @@ static void print_help() {
     std::wcout << L"  --quota, --quotas        Audit NTFS per-owner disk quota consumption and allocation\n";
     std::wcout << L"  --attrdef, --schema      Inspect NTFS attribute definition table ($AttrDef) schema\n";
     std::wcout << L"  --churn, --sequence-audit Audit MFT record sequence numbers and churn distribution\n";
+    std::wcout << L"  --sds, --security-db     Inspect NTFS security descriptor database ($Secure:$SDS)\n";
+    std::wcout << L"  --vol-info, --dirty      Inspect volume integrity flags and dirty state ($Volume)\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -174,6 +178,8 @@ int wmain(int argc, wchar_t* argv[]) {
     bool mode_attrdef = false;
     bool mode_churn = false;
     size_t churn_limit = 20;
+    bool mode_sds = false;
+    bool mode_volume_info = false;
     uint64_t carve_frn = 0;
     std::wstring carve_out_path;
     std::wstring carve_stream_name;
@@ -279,6 +285,10 @@ int wmain(int argc, wchar_t* argv[]) {
             if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
                 churn_limit = static_cast<size_t>(_wtoi(argv[++i]));
             }
+        } else if (arg == L"--sds" || arg == L"--security-db") {
+            mode_sds = true;
+        } else if (arg == L"--vol-info" || arg == L"--dirty") {
+            mode_volume_info = true;
         } else if (arg == L"--carve-deleted") {
             mode_carve_deleted = true;
             if (i + 1 < argc) carve_deleted_dir = argv[++i];
@@ -509,6 +519,26 @@ int wmain(int argc, wchar_t* argv[]) {
         }
 
         Formatter::print_attrdef_report(ad_res.value());
+        return 0;
+    }
+
+    // Volume info mode: Direct $Volume metadata and dirty flag inspection
+    if (mode_volume_info) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        auto vi_res = VolumeInfoAnalyzer::inspect(vr);
+        if (!vi_res) {
+            std::wcerr << L"Failed to inspect $Volume: " << vi_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        Formatter::print_volume_info_report(vi_res.value());
         return 0;
     }
 
@@ -811,6 +841,16 @@ int wmain(int argc, wchar_t* argv[]) {
     } else if (mode_churn) {
         auto ch_report = ChurnAnalyzer::analyze(records, churn_limit);
         Formatter::print_churn_report(ch_report);
+    } else if (mode_sds) {
+        VolumeReader vr(drive_letter);
+        if (vr.open()) {
+            auto sec_res = SecureAnalyzer::inspect(vr, records);
+            if (sec_res) {
+                Formatter::print_secure_report(sec_res.value());
+            } else {
+                std::wcerr << L"Failed to inspect $Secure:$SDS: " << sec_res.error().to_string() << L"\n";
+            }
+        }
     } else if (mode_density) {
         auto density_rep = DensityAnalyzer::analyze(records, geom.bytes_per_cluster);
         Formatter::print_density_report(density_rep);

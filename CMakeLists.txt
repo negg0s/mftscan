@@ -77,6 +77,7 @@ add_library(mftscan_core STATIC
     include/mftscan/record_parser.hpp
     include/mftscan/reparse.hpp
     include/mftscan/scanner.hpp
+    include/mftscan/secure.hpp
     include/mftscan/security_auditor.hpp
     include/mftscan/signature_verifier.hpp
     include/mftscan/sparse_slack_analyzer.hpp
@@ -87,6 +88,7 @@ add_library(mftscan_core STATIC
     include/mftscan/usn_journal.hpp
     include/mftscan/usn_monitor.hpp
     include/mftscan/volume.hpp
+    include/mftscan/volume_info.hpp
     src/attr_list.cpp
     src/attrdef.cpp
     src/badclus.cpp
@@ -115,6 +117,7 @@ add_library(mftscan_core STATIC
     src/record_parser.cpp
     src/reparse.cpp
     src/scanner.cpp
+    src/secure.cpp
     src/security_auditor.cpp
     src/signature_verifier.cpp
     src/sparse_slack_analyzer.cpp
@@ -125,6 +128,7 @@ add_library(mftscan_core STATIC
     src/usn_journal.cpp
     src/usn_monitor.cpp
     src/volume.cpp
+    src/volume_info.cpp
 )
 
 target_include_directories(mftscan_core PUBLIC include)

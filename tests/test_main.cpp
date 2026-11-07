@@ -23,6 +23,8 @@
 #include "mftscan/quota.hpp"
 #include "mftscan/attrdef.hpp"
 #include "mftscan/churn.hpp"
+#include "mftscan/secure.hpp"
+#include "mftscan/volume_info.hpp"
 #include "mftscan/usn_journal.hpp"
 #include <cstring>
 #include "mftscan/bitmap.hpp"
@@ -1375,6 +1377,175 @@ static void test_churn_analyzer() {
     check(rep.top_churn_records[1].is_deleted, "top churn record 1 is_deleted is true");
 }
 
+static void test_secure_database_analyzer() {
+    // Construct synthetic $SDS buffer with 2 entries
+    std::vector<uint8_t> sds_buf(256, 0);
+
+    // Entry 1 at offset 0: length = 80
+    auto* h1 = reinterpret_cast<SdsEntryHeader*>(sds_buf.data());
+    h1->hash = 0x11223344;
+    h1->security_id = 0x100;
+    h1->offset = 0;
+    h1->length = 80;
+
+    auto* sd1 = reinterpret_cast<RawSecurityDescriptorRelative*>(sds_buf.data() + 20);
+    sd1->revision = 1;
+    sd1->control = 0x8004; // SE_SELF_RELATIVE | SE_DACL_PRESENT
+    sd1->owner_offset = 20; // offset in SD = 20 + 20 = 40 in sds_buf
+    sd1->group_offset = 36; // offset in SD = 20 + 36 = 56 in sds_buf
+    sd1->dacl_offset = 0;   // NULL DACL
+
+    // Owner SID: S-1-5-32-544 (16 bytes)
+    uint8_t* sid1 = sds_buf.data() + 40;
+    sid1[0] = 1; // revision
+    sid1[1] = 2; // sub_count
+    sid1[7] = 5; // authority = 5
+    *reinterpret_cast<uint32_t*>(sid1 + 8) = 32;
+    *reinterpret_cast<uint32_t*>(sid1 + 12) = 544;
+
+    // Group SID: S-1-5-32-544
+    std::memcpy(sds_buf.data() + 56, sid1, 16);
+
+    // Entry 2 at offset 80: length = 112
+    auto* h2 = reinterpret_cast<SdsEntryHeader*>(sds_buf.data() + 80);
+    h2->hash = 0x55667788;
+    h2->security_id = 0x101;
+    h2->offset = 80;
+    h2->length = 112;
+
+    auto* sd2 = reinterpret_cast<RawSecurityDescriptorRelative*>(sds_buf.data() + 100);
+    sd2->revision = 1;
+    sd2->control = 0x8004;
+    sd2->owner_offset = 20; // 100 + 20 = 120
+    sd2->group_offset = 20;
+    sd2->dacl_offset = 36;  // 100 + 36 = 136
+
+    // Owner SID for Entry 2
+    std::memcpy(sds_buf.data() + 120, sid1, 16);
+
+    // DACL for Entry 2 at 136
+    auto* acl2 = reinterpret_cast<RawAclHeader*>(sds_buf.data() + 136);
+    acl2->acl_revision = 2;
+    acl2->ace_count = 1;
+    acl2->acl_size = 32;
+
+    // ACE at 136 + 8 = 144
+    auto* ace2 = reinterpret_cast<RawAceHeader*>(sds_buf.data() + 144);
+    ace2->ace_type = 0; // ACCESS_ALLOWED
+    ace2->ace_size = 20;
+    // Mask at 144 + 4 = 148
+    *reinterpret_cast<uint32_t*>(sds_buf.data() + 148) = 0x10000000; // GENERIC_ALL
+    // SID at 148 + 4 = 152: S-1-1-0 (Everyone)
+    uint8_t* sid_everyone = sds_buf.data() + 152;
+    sid_everyone[0] = 1; // revision
+    sid_everyone[1] = 1; // sub_count
+    sid_everyone[7] = 1; // authority = 1
+    *reinterpret_cast<uint32_t*>(sid_everyone + 8) = 0; // sub_auth = 0
+
+    // Volume records
+    std::vector<RecordInfo> recs;
+    RecordInfo r1; r1.record_index = 1000; r1.security_id = 0x100; recs.push_back(r1);
+    RecordInfo r2; r2.record_index = 1001; r2.security_id = 0x100; recs.push_back(r2);
+    RecordInfo r3; r3.record_index = 1002; r3.security_id = 0x200; recs.push_back(r3); // missing ID
+
+    auto rep = SecureAnalyzer::parse_sds_buffer(sds_buf.data(), 80 + 112, recs, L'C');
+    check(rep.valid, "rep.valid is true");
+    check(rep.total_sds_entries == 2, "total_sds_entries == 2");
+    check(rep.active_referenced_entries == 1, "active_referenced_entries == 1");
+    check(rep.orphaned_entries == 1, "orphaned_entries == 1");
+    check(rep.null_dacl_descriptors == 1, "null_dacl_descriptors == 1");
+    check(rep.world_writable_descriptors == 1, "world_writable_descriptors == 1");
+    check(rep.unreferenced_security_ids_count == 1, "unreferenced_security_ids_count == 1");
+
+    check(rep.descriptors[0].security_id == 0x100, "descriptor 0 security_id == 0x100");
+    check(rep.descriptors[0].owner_sid_str == L"S-1-5-32-544", "descriptor 0 owner SID matches S-1-5-32-544");
+    check(rep.descriptors[0].referenced_file_count == 2, "descriptor 0 file count == 2");
+
+    check(rep.descriptors[1].security_id == 0x101, "descriptor 1 security_id == 0x101");
+    check(rep.descriptors[1].is_orphaned, "descriptor 1 is_orphaned is true");
+    check(rep.descriptors[1].is_world_writable, "descriptor 1 is_world_writable is true");
+}
+
+static void test_volume_info_analyzer() {
+    std::vector<uint8_t> rec(1024, 0);
+
+    auto* hdr = reinterpret_cast<MftRecordHeader*>(rec.data());
+    hdr->magic = kMftMagicFile;
+    hdr->update_sequence_offset = 48;
+    hdr->update_sequence_size = 3;
+    hdr->flags = 1; // in-use
+    hdr->first_attribute_offset = 56;
+    hdr->record_number = 3;
+
+    // USA array
+    uint16_t* usa = reinterpret_cast<uint16_t*>(rec.data() + 48);
+    usa[0] = 0xAA55;
+    usa[1] = 0x1111;
+    usa[2] = 0x2222;
+
+    // Sector tags at ends of 512-byte sectors
+    *reinterpret_cast<uint16_t*>(rec.data() + 510) = 0xAA55;
+    *reinterpret_cast<uint16_t*>(rec.data() + 1022) = 0xAA55;
+
+    uint32_t off = 56;
+
+    // Attr 1: $STANDARD_INFORMATION (0x10)
+    auto* a1 = reinterpret_cast<AttributeRecordHeader*>(rec.data() + off);
+    a1->type_code = kAttrStandardInformation;
+    a1->record_length = sizeof(AttributeRecordHeader) + sizeof(StandardInformation);
+    a1->non_resident_flag = 0;
+    a1->resident.value_length = sizeof(StandardInformation);
+    a1->resident.value_offset = sizeof(AttributeRecordHeader);
+
+    auto* si = reinterpret_cast<StandardInformation*>(rec.data() + off + a1->resident.value_offset);
+    si->creation_time = 133000000000000000ULL;
+    si->modification_time = 133500000000000000ULL;
+    off += a1->record_length;
+
+    // Attr 2: $VOLUME_NAME (0x60)
+    const wchar_t* label = L"StorageVolume";
+    const uint32_t label_bytes = static_cast<uint32_t>(wcslen(label) * sizeof(wchar_t));
+    auto* a2 = reinterpret_cast<AttributeRecordHeader*>(rec.data() + off);
+    a2->type_code = kAttrVolumeName;
+    a2->record_length = sizeof(AttributeRecordHeader) + label_bytes;
+    a2->non_resident_flag = 0;
+    a2->resident.value_length = label_bytes;
+    a2->resident.value_offset = sizeof(AttributeRecordHeader);
+    std::memcpy(rec.data() + off + a2->resident.value_offset, label, label_bytes);
+    off += a2->record_length;
+
+    // Attr 3: $VOLUME_INFORMATION (0x70)
+    auto* a3 = reinterpret_cast<AttributeRecordHeader*>(rec.data() + off);
+    a3->type_code = kAttrVolumeInformation;
+    a3->record_length = sizeof(AttributeRecordHeader) + sizeof(RawVolumeInformationAttr);
+    a3->non_resident_flag = 0;
+    a3->resident.value_length = sizeof(RawVolumeInformationAttr);
+    a3->resident.value_offset = sizeof(AttributeRecordHeader);
+
+    auto* vi = reinterpret_cast<RawVolumeInformationAttr*>(rec.data() + off + a3->resident.value_offset);
+    vi->major_version = 3;
+    vi->minor_version = 1;
+    vi->flags = kVolFlagDirty | kVolFlagChkdskRan;
+    off += a3->record_length;
+
+    // Attr End
+    auto* a_end = reinterpret_cast<AttributeRecordHeader*>(rec.data() + off);
+    a_end->type_code = kAttrEnd;
+    a_end->record_length = 8;
+
+    auto rep = VolumeInfoAnalyzer::parse_record_buffer(rec.data(), 1024, 512, L'D');
+    check(rep.valid, "rep.valid is true");
+    check(rep.volume_label == L"StorageVolume", "volume_label == StorageVolume");
+    check(rep.major_version == 3, "major_version == 3");
+    check(rep.minor_version == 1, "minor_version == 1");
+    check(rep.ntfs_version_str == L"3.1", "ntfs_version_str == 3.1");
+    check(rep.is_dirty, "is_dirty is true");
+    check(rep.chkdsk_ran, "chkdsk_ran is true");
+    check(!rep.modified_by_chkdsk, "modified_by_chkdsk is false");
+    check(rep.flag_descriptions.size() == 2, "2 flag descriptions present");
+    check(rep.volume_creation_time == 133000000000000000ULL, "creation time matches");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -1492,6 +1663,12 @@ int main() {
     std::wcout << L"[RUN] test_churn_analyzer\n";
     test_churn_analyzer();
 
-    std::wcout << L"All 40 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_secure_database_analyzer\n";
+    test_secure_database_analyzer();
+
+    std::wcout << L"[RUN] test_volume_info_analyzer\n";
+    test_volume_info_analyzer();
+
+    std::wcout << L"All 42 unit test suites passed successfully.\n";
     return 0;
 }

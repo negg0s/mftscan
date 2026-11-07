@@ -32,6 +32,8 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **Volume Disk Quota & Owner Usage Audit**: Extracts `owner_id`, `security_id`, and `quota_charged` from 72-byte `$STANDARD_INFORMATION` records to audit per-owner disk allocations, charged space, and uncharged system records (`--quota`, `--quotas`).
 - **Attribute Definition Table ($AttrDef) Schema Explorer**: Decodes Record 4 (`$AttrDef`) to extract the complete attribute schema of the volume, inspecting collation rules, indexable and multiple-occurrence flags, size constraints, and discovering custom vendor-specific attributes (`--attrdef`, `--schema`).
 - **MFT Record Sequence & Churn Auditor**: Analyzes 16-bit sequence numbers across all MFT records, computing file churn histograms, identifying heavy record re-allocation hotspots (browser caches, temporary files, build artifacts), and warning against sequence rollover risks (`--churn`, `--sequence-audit`).
+- **Central Security Descriptor Database ($Secure:$SDS) Auditor**: Decodes packed security descriptor streams in `$Secure` (FRN 9), inspecting unique owner SIDs, DACL access masks, and deduplication ratios, identifying orphaned security descriptors and files with unresolved security IDs (`--sds`, `--security-db`).
+- **Volume Information & Dirty State Auditor ($Volume)**: Decodes Record 3 (`$Volume`), inspecting volume label, NTFS version (e.g. 3.1), and filesystem flags including `VOLUME_IS_DIRTY`, `VOLUME_CHKDSK_RAN`, and `VOLUME_MODIFIED_BY_CHKDSK` to assess volume health (`--vol-info`, `--dirty`).
 - **Cluster Allocation & Free-Space Fragmentation Map**: Analyzes the volume cluster allocation bitmap, computing contiguous free extent counts, largest contiguous block, average extent length, free space fragmentation index, and an ASCII cluster allocation map (`--bitmap`, `--free-space`).
 - **NTFS Transaction Journal ($LogFile) Analyzer**: Parses the restart page header (`RSTR`), validating USA fixups, LSN checkpoint tracking, active client lists, and clean vs dirty unmount states (`--logfile`, `--journal`).
 - **Multi-Record Attribute List Decoder**: Decodes `$ATTRIBUTE_LIST` (0x20) mappings to track attributes spanning across multiple base and child MFT record segments for fragmented files and extensive streams.
@@ -120,6 +122,8 @@ Analysis & Views:
   --quota, --quotas        Audit volume disk quota charged bytes and file counts per owner
   --attrdef, --schema      Inspect NTFS attribute definition table ($AttrDef) schema
   --churn, --sequence-audit Audit MFT record sequence numbers and churn distribution
+  --sds, --security-db     Inspect NTFS security descriptor database ($Secure:$SDS)
+  --vol-info, --dirty      Inspect volume integrity flags and dirty state ($Volume)
   --ls <dir_FRN>           List directory index contents and carved slack from $INDEX_ROOT
   --watch                  Live monitor real-time volume changes via USN Journal
   --top [N]                List top N largest files (default: 20)
@@ -245,6 +249,12 @@ mftscan D: --attrdef
 
 # Audit MFT record sequence numbers and churn hotspots
 mftscan D: --churn 25
+
+# Audit NTFS security descriptor database and deduplication ratio
+mftscan D: --sds
+
+# Inspect volume integrity flags and dirty state
+mftscan D: --vol-info
 
 # Export all executables to JSON
 mftscan D: --ext "exe,dll" --json > binaries.json

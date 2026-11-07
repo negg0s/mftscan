@@ -26,6 +26,7 @@
 #include "mftscan/object_id.hpp"
 #include "mftscan/quota.hpp"
 #include "mftscan/reparse.hpp"
+#include "mftscan/secure.hpp"
 #include "mftscan/security_auditor.hpp"
 #include "mftscan/signature_verifier.hpp"
 #include "mftscan/sparse_slack_analyzer.hpp"
@@ -33,6 +34,7 @@
 #include "mftscan/timestomp.hpp"
 #include "mftscan/usn_journal.hpp"
 #include "mftscan/usn_monitor.hpp"
+#include "mftscan/volume_info.hpp"
 
 #include <string>
 #include <vector>
@@ -75,6 +77,8 @@ public:
     static void print_quota_report(const QuotaReport& report);
     static void print_attrdef_report(const AttrDefReport& report);
     static void print_churn_report(const ChurnReport& report);
+    static void print_secure_report(const SecureDatabaseReport& report);
+    static void print_volume_info_report(const VolumeInfoReport& report);
 
     static std::string to_json(
         const std::vector<RecordInfo>& records,
