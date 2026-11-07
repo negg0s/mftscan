@@ -343,6 +343,79 @@ void Formatter::print_signature_report(const SignatureReport& report) {
     std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
 }
 
+void Formatter::print_security_report(const std::vector<SecurityAuditResult>& results) {
+    size_t crit_count = 0;
+    size_t high_count = 0;
+    size_t med_count = 0;
+    size_t low_count = 0;
+
+    for (const auto& r : results) {
+        if (r.risk_level == SecurityRiskLevel::Critical) crit_count++;
+        else if (r.risk_level == SecurityRiskLevel::High) high_count++;
+        else if (r.risk_level == SecurityRiskLevel::Medium) med_count++;
+        else if (r.risk_level == SecurityRiskLevel::Low) low_count++;
+    }
+
+    std::wcout << L"NTFS Security Descriptor Audit Report\n";
+    std::wcout << L"Total audited: " << results.size()
+               << L" | Critical: " << crit_count
+               << L" | High: " << high_count
+               << L" | Medium: " << med_count
+               << L" | Low: " << low_count << L"\n\n";
+
+    if (results.empty()) {
+        std::wcout << L"No matching files found for security audit.\n\n";
+        return;
+    }
+
+    std::wcout << std::left
+               << std::setw(10) << L"FRN"
+               << std::setw(12) << L"Risk"
+               << std::setw(24) << L"Owner"
+               << std::setw(38) << L"Findings"
+               << L"Path\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+
+    for (const auto& r : results) {
+        if (r.risk_level == SecurityRiskLevel::None) {
+            continue;
+        }
+
+        std::wstring findings_str;
+        for (size_t i = 0; i < r.findings.size(); ++i) {
+            if (i > 0) findings_str += L"; ";
+            findings_str += r.findings[i];
+        }
+        if (findings_str.size() > 36) {
+            findings_str = findings_str.substr(0, 33) + L"...";
+        }
+
+        std::wstring owner_str = r.owner;
+        if (owner_str.size() > 22) {
+            owner_str = owner_str.substr(0, 19) + L"...";
+        }
+
+        std::wcout << std::left
+                   << std::setw(10) << r.frn
+                   << std::setw(12) << SecurityAuditor::risk_to_string(r.risk_level)
+                   << std::setw(24) << owner_str
+                   << std::setw(38) << findings_str
+                   << r.path << L"\n";
+    }
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
+}
+
+void Formatter::print_carve_summary(const BatchCarveStats& stats, const std::wstring& out_dir) {
+    std::wcout << L"File Carve Summary\n";
+    std::wcout << L"------------------------------------------------------------\n";
+    std::wcout << L"Output directory: " << out_dir << L"\n";
+    std::wcout << L"Attempted:        " << stats.attempted << L"\n";
+    std::wcout << L"Succeeded:        " << stats.succeeded << L"\n";
+    std::wcout << L"Failed:           " << stats.failed << L"\n";
+    std::wcout << L"Total recovered:  " << format_bytes(stats.total_bytes) << L"\n";
+    std::wcout << L"------------------------------------------------------------\n\n";
+}
+
 static std::string escape_json_string(const std::wstring& ws) {
     std::ostringstream oss;
     for (wchar_t wc : ws) {

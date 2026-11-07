@@ -17,6 +17,8 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **Compression & Sparse Space Savings**: Computes physical disk space saved via native NTFS file compression and sparse allocation (`--compression`).
 - **Anti-Forensics & Timestomping Detection**: Cross-examines `$STANDARD_INFORMATION` and `$FILE_NAME` timestamps to detect tampering, such as SI modification before FN creation, inverted creation dates, and zeroed nanosecond fractional seconds (`--timestomp`).
 - **File Signature & Masquerading Detection**: Inspects magic byte signatures (`MZ`, `%PDF`, `PK`, `7z`, `Rar!`, `PNG`, `JPEG`, etc.) to discover file extension spoofing and flag executables masquerading as documents or media (`--type-mismatch`).
+- **NTFS Security & DACL Auditing**: Audits security descriptors, identifying NULL DACLs (unrestricted access), empty DACLs, world-writable files granted to Everyone or Authenticated Users, unmapped orphaned SIDs from removed accounts, and inheritance status (`--security`, `--world-writable`, `--orphaned-sids`).
+- **Raw Cluster File Carving & Deleted Recovery**: Directly streams and extracts file contents from raw disk clusters or resident MFT payloads for any FRN (`--carve <FRN> --out <path>`), supporting Alternate Data Streams (`--stream <name>`), cluster slack extraction (`--include-slack`), and batch deleted file recovery (`--carve-deleted <dir>`).
 - **Directory Index B-Tree Walker & Slack Carver**: Decodes `$INDEX_ROOT` and `$INDEX_ALLOCATION` nodes to list directory contents directly from internal B-Trees (`--ls <dir_FRN>`) and carves residual deleted index entries from index slack space.
 - **Low-Level Record Inspector**: Decodes raw resident and non-resident attributes, tests fixup integrity, and outputs formatted 16-byte aligned hexadecimal and ASCII previews (`--inspect <FRN>`).
 - **Real-Time Change Monitor**: Reads live filesystem operations via `FSCTL_READ_USN_JOURNAL` (`--watch`), showing creations, deletions, renames, and writes as they happen.
@@ -78,6 +80,14 @@ Analysis & Views:
   --compression            Report NTFS compression and sparse space savings
   --timestomp              Detect timestamp anomalies and timestomping signatures
   --type-mismatch          Detect file extension spoofing and masquerading executables
+  --security               Audit NTFS security descriptors (DACLs, owners, SIDs)
+  --world-writable         Filter files with world-writable permissions
+  --orphaned-sids          Filter files with unmapped orphaned SIDs
+  --carve <FRN>            Directly carve / extract file content from volume clusters
+  --out <path>             Destination file or directory for carved content
+  --stream <name>          Alternate Data Stream name to carve (default: unnamed $DATA)
+  --carve-deleted <dir>    Carve all deleted files on volume to directory
+  --include-slack          Include cluster slack bytes when carving
   --ls <dir_FRN>           List directory index contents and carved slack from $INDEX_ROOT
   --watch                  Live monitor real-time volume changes via USN Journal
   --top [N]                List top N largest files (default: 20)
@@ -140,6 +150,21 @@ mftscan D: --deleted
 
 # Search for Alternate Data Streams
 mftscan D: --ads
+
+# Audit NTFS security descriptors and permissions
+mftscan D: --security
+
+# Find world-writable files on volume
+mftscan D: --world-writable
+
+# Find files with orphaned unmapped SIDs from deleted user accounts
+mftscan D: --orphaned-sids
+
+# Carve raw file data from disk clusters for record 12345
+mftscan D: --carve 12345 --out recovered.bin
+
+# Batch carve all deleted PDF files into recovery directory
+mftscan D: --carve-deleted .\recovered_pdfs --ext pdf
 
 # Export all executables to JSON
 mftscan D: --ext "exe,dll" --json > binaries.json

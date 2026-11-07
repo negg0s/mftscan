@@ -47,6 +47,7 @@ endif()
 
 # Core static library
 add_library(mftscan_core STATIC
+    include/mftscan/carver.hpp
     include/mftscan/common.hpp
     include/mftscan/data_run.hpp
     include/mftscan/disk_usage.hpp
@@ -62,6 +63,7 @@ add_library(mftscan_core STATIC
     include/mftscan/raw_streamer.hpp
     include/mftscan/record_parser.hpp
     include/mftscan/scanner.hpp
+    include/mftscan/security_auditor.hpp
     include/mftscan/signature_verifier.hpp
     include/mftscan/sparse_slack_analyzer.hpp
     include/mftscan/thread_pool.hpp
@@ -69,6 +71,7 @@ add_library(mftscan_core STATIC
     include/mftscan/tui.hpp
     include/mftscan/usn_monitor.hpp
     include/mftscan/volume.hpp
+    src/carver.cpp
     src/data_run.cpp
     src/disk_usage.cpp
     src/duplicate_detector.cpp
@@ -82,6 +85,7 @@ add_library(mftscan_core STATIC
     src/raw_streamer.cpp
     src/record_parser.cpp
     src/scanner.cpp
+    src/security_auditor.cpp
     src/signature_verifier.cpp
     src/sparse_slack_analyzer.cpp
     src/thread_pool.cpp
@@ -92,6 +96,7 @@ add_library(mftscan_core STATIC
 )
 
 target_include_directories(mftscan_core PUBLIC include)
+target_link_libraries(mftscan_core PUBLIC advapi32)
 
 # Main CLI executable
 add_executable(mftscan

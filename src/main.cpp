@@ -8,6 +8,8 @@
 #include "mftscan/privileges.hpp"
 #include "mftscan/scanner.hpp"
 #include "mftscan/signature_verifier.hpp"
+#include "mftscan/carver.hpp"
+#include "mftscan/security_auditor.hpp"
 #include "mftscan/sparse_slack_analyzer.hpp"
 #include "mftscan/timestomp.hpp"
 #include "mftscan/tui.hpp"
@@ -68,6 +70,14 @@ static void print_help() {
     std::wcout << L"  --compression            Report NTFS compression and sparse space savings\n";
     std::wcout << L"  --timestomp              Detect timestamp anomalies and timestomping signatures\n";
     std::wcout << L"  --type-mismatch          Detect file extension spoofing and masquerading executables\n";
+    std::wcout << L"  --security               Audit NTFS security descriptors (DACLs, owners, SIDs)\n";
+    std::wcout << L"  --world-writable         Filter files with world-writable permissions\n";
+    std::wcout << L"  --orphaned-sids          Filter files with unmapped orphaned SIDs\n";
+    std::wcout << L"  --carve <FRN>            Directly carve / extract file content from volume clusters\n";
+    std::wcout << L"  --out <path>             Destination file or directory for carved content\n";
+    std::wcout << L"  --stream <name>          Alternate Data Stream name to carve (default: unnamed $DATA)\n";
+    std::wcout << L"  --carve-deleted <dir>    Carve all deleted files on volume to directory\n";
+    std::wcout << L"  --include-slack          Include cluster slack bytes when carving\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -108,6 +118,16 @@ int wmain(int argc, wchar_t* argv[]) {
     bool mode_compression = false;
     bool mode_timestomp = false;
     bool mode_signature = false;
+    bool mode_security = false;
+    bool filter_world_writable = false;
+    bool filter_orphaned_sids = false;
+    bool mode_carve = false;
+    uint64_t carve_frn = 0;
+    std::wstring carve_out_path;
+    std::wstring carve_stream_name;
+    bool carve_include_slack = false;
+    bool mode_carve_deleted = false;
+    std::wstring carve_deleted_dir;
     bool mode_watch = false;
     bool mode_top = false;
     size_t top_limit = 20;
@@ -149,6 +169,28 @@ int wmain(int argc, wchar_t* argv[]) {
             }
         } else if (arg == L"--type-mismatch" || arg == L"--audit-ext") {
             mode_signature = true;
+        } else if (arg == L"--security") {
+            mode_security = true;
+        } else if (arg == L"--world-writable") {
+            mode_security = true;
+            filter_world_writable = true;
+        } else if (arg == L"--orphaned-sids") {
+            mode_security = true;
+            filter_orphaned_sids = true;
+        } else if (arg == L"--carve") {
+            mode_carve = true;
+            if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
+                carve_frn = static_cast<uint64_t>(_wtoi64(argv[++i]));
+            }
+        } else if (arg == L"--out") {
+            if (i + 1 < argc) carve_out_path = argv[++i];
+        } else if (arg == L"--stream") {
+            if (i + 1 < argc) carve_stream_name = argv[++i];
+        } else if (arg == L"--carve-deleted") {
+            mode_carve_deleted = true;
+            if (i + 1 < argc) carve_deleted_dir = argv[++i];
+        } else if (arg == L"--include-slack") {
+            carve_include_slack = true;
         } else if (arg == L"--dup") {
             mode_dup = true;
             if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
@@ -224,6 +266,37 @@ int wmain(int argc, wchar_t* argv[]) {
         } else if (arg == L"--fallback") {
             force_fallback = true;
         }
+    }
+
+    // Carve mode: Direct file extraction from raw volume clusters
+    if (mode_carve) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        if (carve_out_path.empty()) {
+            carve_out_path = L"carved_frn_" + std::to_wstring(carve_frn) + L".bin";
+        }
+
+        std::wcout << L"Extracting FRN " << carve_frn << L" from volume " << drive_letter << L": to " << carve_out_path << L"...\n";
+        auto carve_res = FileCarver::carve_record(vr, carve_frn, carve_out_path, carve_stream_name, carve_include_slack);
+        if (!carve_res) {
+            std::wcerr << L"Carving failed: " << carve_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        const auto& cr = carve_res.value();
+        std::wcout << L"Successfully extracted file!\n";
+        std::wcout << L"  FRN:          " << cr.frn << L"\n";
+        std::wcout << L"  Destination:  " << cr.output_path << L"\n";
+        std::wcout << L"  Size:         " << Formatter::format_bytes(cr.bytes_written) << L" (" << cr.bytes_written << L" bytes)\n";
+        std::wcout << L"  Storage:      " << (cr.is_resident ? L"Resident in MFT" : (L"Non-resident (" + std::to_wstring(cr.clusters_read) + L" clusters)")) << L"\n";
+        std::wcout << L"  State:        " << (cr.is_deleted_record ? L"Deleted / Unallocated Record" : L"Active Record") << L"\n\n";
+        return 0;
     }
 
     // Inspect mode: Direct record attribute inspection
@@ -347,7 +420,37 @@ int wmain(int argc, wchar_t* argv[]) {
 
     Formatter::print_scan_summary(stats, geom);
 
-    if (mode_dup) {
+    if (mode_carve_deleted) {
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+        if (carve_deleted_dir.empty()) {
+            carve_deleted_dir = L".\\carved_deleted";
+        }
+        std::wcout << L"Carving deleted files to " << carve_deleted_dir << L"...\n";
+        std::wstring ext_filter = filter.extensions.empty() ? L"" : filter.extensions[0];
+        auto carve_stats = FileCarver::carve_deleted_files(vr, records, carve_deleted_dir, ext_filter, carve_include_slack);
+        Formatter::print_carve_summary(carve_stats, carve_deleted_dir);
+    } else if (mode_security) {
+        std::wcout << L"Auditing security descriptors for " << records.size() << L" records...\n\n";
+        std::vector<SecurityAuditResult> sec_results;
+        for (const auto& r : records) {
+            if (r.is_deleted || r.full_path.empty()) {
+                continue;
+            }
+            auto audit_res = SecurityAuditor::audit_path(r.full_path, r.record_index);
+            if (audit_res) {
+                const auto& item = audit_res.value();
+                if (filter_world_writable && !item.is_world_writable) continue;
+                if (filter_orphaned_sids && !item.has_orphaned_sids) continue;
+                sec_results.push_back(item);
+            }
+        }
+        Formatter::print_security_report(sec_results);
+    } else if (mode_dup) {
         auto dup_report = DuplicateDetector::find_duplicates(records, dup_min_size);
         Formatter::print_duplicates_table(dup_report);
     } else if (mode_defrag) {

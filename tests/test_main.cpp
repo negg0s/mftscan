@@ -11,6 +11,8 @@
 #include "mftscan/query.hpp"
 #include "mftscan/record_parser.hpp"
 #include "mftscan/signature_verifier.hpp"
+#include "mftscan/carver.hpp"
+#include "mftscan/security_auditor.hpp"
 #include "mftscan/sparse_slack_analyzer.hpp"
 #include "mftscan/thread_pool.hpp"
 #include "mftscan/timestomp.hpp"
@@ -619,6 +621,123 @@ static void test_signature_verifier() {
     check(rep.entries[0].record_index == 100, "flagged invoice.pdf as masquerading executable");
 }
 
+static void test_security_auditor() {
+    check(SecurityAuditor::format_access_mask(FILE_ALL_ACCESS) == L"Full Control", "format_access_mask full control");
+    check(SecurityAuditor::format_access_mask(FILE_GENERIC_READ).find(L"Read") != std::wstring::npos, "format_access_mask read");
+    check(wcscmp(SecurityAuditor::risk_to_string(SecurityRiskLevel::Critical), L"CRITICAL") == 0, "risk_to_string critical");
+    check(wcscmp(SecurityAuditor::risk_to_string(SecurityRiskLevel::High), L"HIGH") == 0, "risk_to_string high");
+
+    // Test NULL DACL
+    SECURITY_DESCRIPTOR sd_null{};
+    check(InitializeSecurityDescriptor(&sd_null, SECURITY_DESCRIPTOR_REVISION), "InitializeSecurityDescriptor null");
+    check(SetSecurityDescriptorDacl(&sd_null, TRUE, nullptr, FALSE), "SetSecurityDescriptorDacl null");
+    auto res_null = SecurityAuditor::audit_security_descriptor(&sd_null, L"C:\\test_null.txt", 100);
+    check(res_null.ok(), "audit_security_descriptor null dacl ok");
+    check(res_null.value().has_null_dacl, "has_null_dacl detected");
+    check(res_null.value().risk_level == SecurityRiskLevel::Critical, "null dacl risk is critical");
+
+    // Test Empty DACL
+    SECURITY_DESCRIPTOR sd_empty{};
+    check(InitializeSecurityDescriptor(&sd_empty, SECURITY_DESCRIPTOR_REVISION), "InitializeSecurityDescriptor empty");
+    BYTE acl_buf[sizeof(ACL)]{};
+    PACL p_acl = reinterpret_cast<PACL>(acl_buf);
+    check(InitializeAcl(p_acl, sizeof(acl_buf), ACL_REVISION), "InitializeAcl");
+    check(SetSecurityDescriptorDacl(&sd_empty, TRUE, p_acl, FALSE), "SetSecurityDescriptorDacl empty");
+    auto res_empty = SecurityAuditor::audit_security_descriptor(&sd_empty, L"C:\\test_empty.txt", 101);
+    check(res_empty.ok(), "audit_security_descriptor empty dacl ok");
+    check(res_empty.value().has_empty_dacl, "has_empty_dacl detected");
+
+    // Test World-Writable DACL
+    SECURITY_DESCRIPTOR sd_world{};
+    check(InitializeSecurityDescriptor(&sd_world, SECURITY_DESCRIPTOR_REVISION), "InitializeSecurityDescriptor world");
+    BYTE world_sid[SECURITY_MAX_SID_SIZE]{};
+    DWORD sid_sz = sizeof(world_sid);
+    check(CreateWellKnownSid(WinWorldSid, nullptr, world_sid, &sid_sz), "CreateWellKnownSid WinWorldSid");
+    BYTE acl_world_buf[1024]{};
+    PACL p_world_acl = reinterpret_cast<PACL>(acl_world_buf);
+    check(InitializeAcl(p_world_acl, sizeof(acl_world_buf), ACL_REVISION), "InitializeAcl world");
+    check(AddAccessAllowedAce(p_world_acl, ACL_REVISION, FILE_GENERIC_WRITE | FILE_GENERIC_READ, reinterpret_cast<PSID>(world_sid)), "AddAccessAllowedAce");
+    check(SetSecurityDescriptorDacl(&sd_world, TRUE, p_world_acl, FALSE), "SetSecurityDescriptorDacl world");
+    auto res_world = SecurityAuditor::audit_security_descriptor(&sd_world, L"C:\\Data\\file.txt", 102);
+    check(res_world.ok(), "audit_security_descriptor world writable ok");
+    check(res_world.value().is_world_writable, "is_world_writable detected");
+    check(res_world.value().risk_level == SecurityRiskLevel::High, "world writable risk is high");
+}
+
+static void test_file_carver() {
+    check(FileCarver::sanitize_filename(L"bad:file*name?.txt") == L"bad_file_name_.txt", "sanitize filename chars");
+    check(FileCarver::sanitize_filename(L"") == L"unnamed", "sanitize empty filename");
+
+    std::vector<uint8_t> rec(1024, 0);
+    auto* hdr = reinterpret_cast<MftRecordHeader*>(rec.data());
+    hdr->magic = kMftMagicFile;
+    hdr->update_sequence_offset = 48;
+    hdr->update_sequence_size = 3;
+    hdr->first_attribute_offset = 64;
+    hdr->flags = kRecordInUse;
+    hdr->bytes_used = 1024;
+    hdr->bytes_allocated = 1024;
+
+    // USA fixup tags
+    uint16_t usa_tag = 0x5A5A;
+    *reinterpret_cast<uint16_t*>(rec.data() + 48) = usa_tag;
+    *reinterpret_cast<uint16_t*>(rec.data() + 510) = usa_tag;
+    *reinterpret_cast<uint16_t*>(rec.data() + 1022) = usa_tag;
+
+    // Add Resident $DATA attribute at offset 64
+    auto* attr = reinterpret_cast<AttributeRecordHeader*>(rec.data() + 64);
+    attr->type_code = kAttrData;
+    attr->record_length = 80;
+    attr->non_resident_flag = 0;
+    attr->name_length = 0;
+    attr->resident.value_offset = 24;
+    const char test_data[] = "NTFS Carve Resident Payload Verification!";
+    const uint32_t payload_len = static_cast<uint32_t>(sizeof(test_data));
+    attr->resident.value_length = payload_len;
+    memcpy(rec.data() + 64 + 24, test_data, payload_len);
+
+    // End marker attribute
+    auto* end_attr = reinterpret_cast<AttributeRecordHeader*>(rec.data() + 64 + 80);
+    end_attr->type_code = kAttrEnd;
+
+    VolumeGeometry geom{};
+    geom.bytes_per_sector = 512;
+    geom.bytes_per_cluster = 4096;
+    geom.bytes_per_record = 1024;
+
+    wchar_t temp_dir[MAX_PATH]{};
+    GetTempPathW(MAX_PATH, temp_dir);
+    std::wstring out_file = std::wstring(temp_dir) + L"mftscan_test_carve.bin";
+
+    auto carve_res = FileCarver::carve_from_buffer(
+        INVALID_HANDLE_VALUE,
+        geom,
+        rec.data(),
+        1024,
+        9999,
+        out_file,
+        L"",
+        false
+    );
+
+    check(carve_res.ok(), "carve_from_buffer ok");
+    check(carve_res.value().success, "carve success flag");
+    check(carve_res.value().bytes_written == payload_len, "carved bytes written matches");
+    check(carve_res.value().is_resident, "carved attribute identified as resident");
+
+    // Verify file content on disk
+    FILE* f = nullptr;
+    _wfopen_s(&f, out_file.c_str(), L"rb");
+    check(f != nullptr, "carved output file opened");
+    char read_back[128]{};
+    size_t read_bytes = fread(read_back, 1, sizeof(read_back), f);
+    fclose(f);
+    DeleteFileW(out_file.c_str());
+
+    check(read_bytes == payload_len, "read back size matches payload");
+    check(memcmp(read_back, test_data, payload_len) == 0, "read back data matches exactly");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -686,6 +805,12 @@ int main() {
     std::wcout << L"[RUN] test_signature_verifier\n";
     test_signature_verifier();
 
-    std::wcout << L"All 22 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_security_auditor\n";
+    test_security_auditor();
+
+    std::wcout << L"[RUN] test_file_carver\n";
+    test_file_carver();
+
+    std::wcout << L"All 24 unit test suites passed successfully.\n";
     return 0;
 }
