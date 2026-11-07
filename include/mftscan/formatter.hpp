@@ -9,12 +9,14 @@
 #include <windows.h>
 
 #include "mftscan/bitmap.hpp"
+#include "mftscan/boot_sector.hpp"
 #include "mftscan/carver.hpp"
 #include "mftscan/common.hpp"
 #include "mftscan/disk_usage.hpp"
 #include "mftscan/duplicate_detector.hpp"
 #include "mftscan/fragmentation_analyzer.hpp"
 #include "mftscan/logfile.hpp"
+#include "mftscan/reparse.hpp"
 #include "mftscan/security_auditor.hpp"
 #include "mftscan/signature_verifier.hpp"
 #include "mftscan/sparse_slack_analyzer.hpp"
@@ -50,6 +52,8 @@ public:
     static void print_system_audit_report(const SystemAuditReport& report);
     static void print_bitmap_report(const BitmapReport& report);
     static void print_logfile_report(const LogFileReport& report);
+    static void print_boot_sector_report(const BootSectorComparison& comp);
+    static void print_reparse_report(const std::vector<ReparseInfo>& list);
 
     static std::string to_json(
         const std::vector<RecordInfo>& records,

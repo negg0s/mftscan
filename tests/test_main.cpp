@@ -12,6 +12,8 @@
 #include "mftscan/record_parser.hpp"
 #include "mftscan/signature_verifier.hpp"
 #include "mftscan/attr_list.hpp"
+#include "mftscan/boot_sector.hpp"
+#include "mftscan/reparse.hpp"
 #include "mftscan/bitmap.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
@@ -865,6 +867,90 @@ static void test_logfile_analyzer() {
     check(r.log_clients == 1, "log_clients is 1");
 }
 
+static void test_boot_sector_parser() {
+    NtfsBootSector bs{};
+    memcpy(bs.jump, "\xEB\x52\x90", 3);
+    memcpy(bs.oem_id, "NTFS    ", 8);
+    bs.bytes_per_sector = 512;
+    bs.sectors_per_cluster = 8;
+    bs.total_sectors = 2048000;
+    bs.mft_lcn = 786432;
+    bs.mft_mirr_lcn = 2;
+    bs.clusters_per_record_code = -10; // 1024 bytes
+    bs.clusters_per_index_code = -12;  // 4096 bytes
+    bs.volume_serial_number = 0xA1B2C3D4E5F60718ULL;
+    bs.boot_signature = kBootSectorSignature;
+
+    auto res = BootSectorParser::parse_buffer(reinterpret_cast<const uint8_t*>(&bs), sizeof(bs), L'C');
+    check(res.ok(), "parse_buffer ok");
+    const auto& r = res.value();
+
+    check(r.is_valid_ntfs, "is_valid_ntfs is true");
+    check(r.signature_valid, "signature_valid is true");
+    check(r.bytes_per_sector == 512, "bytes_per_sector is 512");
+    check(r.sectors_per_cluster == 8, "sectors_per_cluster is 8");
+    check(r.bytes_per_cluster == 4096, "bytes_per_cluster is 4096");
+    check(r.bytes_per_record == 1024, "bytes_per_record is 1024");
+    check(r.bytes_per_index_block == 4096, "bytes_per_index_block is 4096");
+    check(r.total_sectors == 2048000, "total_sectors is 2048000");
+    check(r.mft_start_lcn == 786432, "mft_start_lcn is 786432");
+    check(r.serial_number == 0xA1B2C3D4E5F60718ULL, "serial_number matches");
+    check(!r.serial_number_formatted.empty(), "serial_number_formatted non-empty");
+
+    check(BootSectorParser::decode_size_code(-10, 4096) == 1024, "decode -10 code to 1024 bytes");
+    check(BootSectorParser::decode_size_code(4, 4096) == 16384, "decode 4 clusters to 16384 bytes");
+}
+
+static void test_reparse_point_analyzer() {
+    check(ReparsePointAnalyzer::tag_to_string(kTagSymlink) == L"Symbolic Link", "tag_to_string symlink");
+    check(ReparsePointAnalyzer::tag_to_string(kTagMountPoint).find(L"Junction") != std::wstring::npos, "tag_to_string junction");
+
+    // Construct synthetic Symlink attribute
+    std::wstring sym_target = L"C:\\Target\\File.txt";
+    const uint16_t path_bytes = static_cast<uint16_t>(sym_target.size() * sizeof(wchar_t));
+    std::vector<uint8_t> sym_buf(20 + path_bytes, 0);
+
+    *reinterpret_cast<uint32_t*>(sym_buf.data()) = kTagSymlink;
+    *reinterpret_cast<uint16_t*>(sym_buf.data() + 4) = static_cast<uint16_t>(12 + path_bytes);
+    *reinterpret_cast<uint16_t*>(sym_buf.data() + 8) = 0; // sub_off
+    *reinterpret_cast<uint16_t*>(sym_buf.data() + 10) = path_bytes; // sub_len
+    *reinterpret_cast<uint16_t*>(sym_buf.data() + 12) = 0; // print_off
+    *reinterpret_cast<uint16_t*>(sym_buf.data() + 14) = path_bytes; // print_len
+    *reinterpret_cast<uint32_t*>(sym_buf.data() + 16) = 0; // absolute
+    memcpy(sym_buf.data() + 20, sym_target.data(), path_bytes);
+
+    auto res = ReparsePointAnalyzer::parse_attribute(sym_buf.data(), sym_buf.size(), 500, L"C:\\Link.txt");
+    check(res.ok(), "parse_attribute symlink ok");
+    const auto& r = res.value();
+
+    check(r.is_symlink, "is_symlink is true");
+    check(!r.is_junction, "is_junction is false");
+    check(!r.is_relative, "is_relative is false");
+    check(r.target_path == sym_target, "symlink target path matches");
+    check(r.tag_name == L"Symbolic Link", "symlink tag name matches");
+
+    // Construct synthetic Junction attribute
+    std::wstring junc_target = L"\\??\\C:\\TargetDir";
+    const uint16_t junc_bytes = static_cast<uint16_t>(junc_target.size() * sizeof(wchar_t));
+    std::vector<uint8_t> junc_buf(16 + junc_bytes, 0);
+
+    *reinterpret_cast<uint32_t*>(junc_buf.data()) = kTagMountPoint;
+    *reinterpret_cast<uint16_t*>(junc_buf.data() + 4) = static_cast<uint16_t>(8 + junc_bytes);
+    *reinterpret_cast<uint16_t*>(junc_buf.data() + 8) = 0; // sub_off
+    *reinterpret_cast<uint16_t*>(junc_buf.data() + 10) = junc_bytes; // sub_len
+    *reinterpret_cast<uint16_t*>(junc_buf.data() + 12) = 0; // print_off
+    *reinterpret_cast<uint16_t*>(junc_buf.data() + 14) = junc_bytes; // print_len
+    memcpy(junc_buf.data() + 16, junc_target.data(), junc_bytes);
+
+    auto res_j = ReparsePointAnalyzer::parse_attribute(junc_buf.data(), junc_buf.size(), 501, L"C:\\JunctionDir");
+    check(res_j.ok(), "parse_attribute junction ok");
+    const auto& rj = res_j.value();
+
+    check(rj.is_junction, "is_junction is true");
+    check(!rj.is_symlink, "is_symlink is false");
+    check(rj.target_path == junc_target, "junction target path matches");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -950,6 +1036,12 @@ int main() {
     std::wcout << L"[RUN] test_logfile_analyzer\n";
     test_logfile_analyzer();
 
-    std::wcout << L"All 28 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_boot_sector_parser\n";
+    test_boot_sector_parser();
+
+    std::wcout << L"[RUN] test_reparse_point_analyzer\n";
+    test_reparse_point_analyzer();
+
+    std::wcout << L"All 30 unit test suites passed successfully.\n";
     return 0;
 }

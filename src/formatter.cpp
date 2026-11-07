@@ -491,6 +491,53 @@ void Formatter::print_logfile_report(const LogFileReport& report) {
     std::wcout << L"--------------------------------------------------------------------------------\n\n";
 }
 
+void Formatter::print_boot_sector_report(const BootSectorComparison& comp) {
+    const auto& p = comp.primary;
+    std::wcout << L"NTFS Boot Sector & BIOS Parameter Block (BPB) Report (Volume " << p.volume_letter << L":)\n";
+    std::wcout << L"--------------------------------------------------------------------------------\n";
+    std::wcout << L"OEM Identifier:            " << std::wstring(p.oem_id.begin(), p.oem_id.end()) << L"\n";
+    std::wcout << L"Signature (0xAA55):        " << (p.signature_valid ? L"Valid (0xAA55)" : L"Invalid") << L"\n";
+    std::wcout << L"Bytes per Sector:          " << p.bytes_per_sector << L"\n";
+    std::wcout << L"Sectors per Cluster:       " << static_cast<int>(p.sectors_per_cluster) << L" (" << p.bytes_per_cluster << L" bytes/cluster)\n";
+    std::wcout << L"Total Sectors:             " << p.total_sectors << L" (" << format_bytes(p.volume_size_bytes) << L")\n";
+    std::wcout << L"MFT Cluster (LCN):         " << p.mft_start_lcn << L"\n";
+    std::wcout << L"MFTMirr Cluster (LCN):     " << p.mft_mirr_start_lcn << L"\n";
+    std::wcout << L"Bytes per MFT Record:      " << p.bytes_per_record << L"\n";
+    std::wcout << L"Bytes per Index Block:     " << p.bytes_per_index_block << L"\n";
+    std::wcout << L"Volume Serial Number:      " << p.serial_number_formatted << L" (0x" << std::hex << std::uppercase << p.serial_number << std::dec << L")\n";
+    std::wcout << L"Backup Boot Sector:        " << (comp.has_backup ? (comp.sectors_match ? L"Present (Exact match with primary)" : L"Present (Diverges from primary)") : L"Not found") << L"\n";
+    std::wcout << L"Integrity Note:            " << comp.notes << L"\n";
+    std::wcout << L"--------------------------------------------------------------------------------\n\n";
+}
+
+void Formatter::print_reparse_report(const std::vector<ReparseInfo>& list) {
+    std::wcout << L"NTFS Reparse Points, Junctions & Symbolic Links (" << list.size() << L" found)\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+    std::wcout << std::left
+               << std::setw(8)  << L"FRN"
+               << std::setw(32) << L"Tag / Type"
+               << std::setw(10) << L"State"
+               << std::setw(34) << L"Target"
+               << L"Source Path\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+
+    for (const auto& r : list) {
+        std::wstring state_str = r.is_broken ? L"[BROKEN]" : L"OK";
+        std::wstring tgt_str = r.target_path;
+        if (tgt_str.size() > 32) {
+            tgt_str = tgt_str.substr(0, 29) + L"...";
+        }
+
+        std::wcout << std::left
+                   << std::setw(8)  << r.frn
+                   << std::setw(32) << r.tag_name
+                   << std::setw(10) << state_str
+                   << std::setw(34) << tgt_str
+                   << r.source_path << L"\n";
+    }
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
+}
+
 static std::string escape_json_string(const std::wstring& ws) {
     std::ostringstream oss;
     for (wchar_t wc : ws) {

@@ -6,10 +6,13 @@
 #include "mftscan/index_parser.hpp"
 #include "mftscan/inspector.hpp"
 #include "mftscan/privileges.hpp"
+#include "mftscan/record_parser.hpp"
 #include "mftscan/scanner.hpp"
 #include "mftscan/signature_verifier.hpp"
 #include "mftscan/attr_list.hpp"
 #include "mftscan/bitmap.hpp"
+#include "mftscan/boot_sector.hpp"
+#include "mftscan/reparse.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
 #include "mftscan/system_files.hpp"
@@ -85,6 +88,8 @@ static void print_help() {
     std::wcout << L"  --system, --meta         Inspect core NTFS system metadata files ($MFT, $Volume, $Bitmap)\n";
     std::wcout << L"  --bitmap, --free-space   Analyze volume cluster allocation and free-space fragmentation map\n";
     std::wcout << L"  --logfile, --journal     Inspect NTFS transaction journal ($LogFile) restart area and health\n";
+    std::wcout << L"  --boot, --bpb            Inspect NTFS Boot Sector (BPB) and verify against backup boot sector\n";
+    std::wcout << L"  --reparse, --symlinks    List directory junctions, symbolic links, and reparse points\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -132,6 +137,8 @@ int wmain(int argc, wchar_t* argv[]) {
     bool mode_system = false;
     bool mode_bitmap = false;
     bool mode_logfile = false;
+    bool mode_boot = false;
+    bool mode_reparse = false;
     uint64_t carve_frn = 0;
     std::wstring carve_out_path;
     std::wstring carve_stream_name;
@@ -202,6 +209,10 @@ int wmain(int argc, wchar_t* argv[]) {
             mode_bitmap = true;
         } else if (arg == L"--logfile" || arg == L"--journal") {
             mode_logfile = true;
+        } else if (arg == L"--boot" || arg == L"--bpb") {
+            mode_boot = true;
+        } else if (arg == L"--reparse" || arg == L"--symlinks" || arg == L"--junctions") {
+            mode_reparse = true;
         } else if (arg == L"--carve-deleted") {
             mode_carve_deleted = true;
             if (i + 1 < argc) carve_deleted_dir = argv[++i];
@@ -375,6 +386,26 @@ int wmain(int argc, wchar_t* argv[]) {
         return 0;
     }
 
+    // Boot Sector mode: Inspect BPB and compare against backup sector
+    if (mode_boot) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        auto boot_res = BootSectorParser::inspect_volume(vr);
+        if (!boot_res) {
+            std::wcerr << L"Failed to inspect boot sector: " << boot_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        Formatter::print_boot_sector_report(boot_res.value());
+        return 0;
+    }
+
     // Inspect mode: Direct record attribute inspection
     if (mode_inspect) {
         Formatter::print_banner();
@@ -496,7 +527,58 @@ int wmain(int argc, wchar_t* argv[]) {
 
     Formatter::print_scan_summary(stats, geom);
 
-    if (mode_carve_deleted) {
+    if (mode_reparse) {
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        std::vector<ReparseInfo> reparse_list;
+
+        const uint32_t rec_size = vr.is_open() ? vr.geometry().bytes_per_record : 1024;
+        std::vector<uint8_t> rec_buf(rec_size);
+
+        for (const auto& r : records) {
+            if ((r.attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0) {
+                continue;
+            }
+
+            if (vr.is_open()) {
+                auto read_res = vr.read_file_record(r.record_index, rec_buf.data(), rec_size);
+                if (read_res) {
+                    RecordParser::apply_fixup(rec_buf.data(), rec_size, vr.geometry().bytes_per_sector);
+                    const auto* mft_hdr = reinterpret_cast<const MftRecordHeader*>(rec_buf.data());
+                    uint32_t offset = mft_hdr->first_attribute_offset;
+                    while (offset + sizeof(AttributeRecordHeader) <= rec_size) {
+                        const auto* attr = reinterpret_cast<const AttributeRecordHeader*>(rec_buf.data() + offset);
+                        if (attr->type_code == kAttrEnd || attr->record_length == 0) break;
+                        if (offset + attr->record_length > rec_size) break;
+
+                        if (attr->type_code == kAttrReparsePoint && attr->non_resident_flag == 0) {
+                            const uint16_t v_off = attr->resident.value_offset;
+                            const uint32_t v_len = attr->resident.value_length;
+                            if (v_off + v_len <= attr->record_length) {
+                                auto rep_res = ReparsePointAnalyzer::parse_attribute(
+                                    rec_buf.data() + offset + v_off,
+                                    v_len,
+                                    r.record_index,
+                                    r.full_path.empty() ? r.name : r.full_path
+                                );
+                                if (rep_res) {
+                                    reparse_list.push_back(rep_res.value());
+                                }
+                            }
+                        }
+                        offset += attr->record_length;
+                    }
+                }
+            } else {
+                ReparseInfo basic_info{};
+                basic_info.frn = r.record_index;
+                basic_info.source_path = r.full_path.empty() ? r.name : r.full_path;
+                basic_info.tag_name = L"Reparse Point";
+                reparse_list.push_back(std::move(basic_info));
+            }
+        }
+        Formatter::print_reparse_report(reparse_list);
+    } else if (mode_carve_deleted) {
         VolumeReader vr(drive_letter);
         auto open_res = vr.open();
         if (!open_res) {
