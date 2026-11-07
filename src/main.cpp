@@ -1,8 +1,11 @@
 #include "mftscan/common.hpp"
 #include "mftscan/disk_usage.hpp"
+#include "mftscan/duplicate_detector.hpp"
 #include "mftscan/formatter.hpp"
 #include "mftscan/privileges.hpp"
 #include "mftscan/scanner.hpp"
+#include "mftscan/tui.hpp"
+#include "mftscan/usn_monitor.hpp"
 
 #include <cwctype>
 #include <iostream>
@@ -47,7 +50,10 @@ static void print_help() {
     std::wcout << L"  --dirs                   Filter directories only\n";
     std::wcout << L"  --deleted                Scan for deleted / unallocated MFT file records\n";
     std::wcout << L"  --ads                    Search Alternate Data Streams (:stream)\n\n";
-    std::wcout << L"Analysis Modes:\n";
+    std::wcout << L"Analysis & Views:\n";
+    std::wcout << L"  -i, --tui                Interactive fullscreen Terminal UI with live filtering\n";
+    std::wcout << L"  --dup [min_size]         Scan for duplicate files by size and hash (default: 4KB)\n";
+    std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
     std::wcout << L"  --types [N]              Show file extension breakdown histogram (default: 20)\n\n";
@@ -59,11 +65,12 @@ static void print_help() {
     std::wcout << L"  -h, --help               Display this help message\n";
     std::wcout << L"  -v, --version            Display version information\n\n";
     std::wcout << L"Examples:\n";
+    std::wcout << L"  mftscan D: -i\n";
+    std::wcout << L"  mftscan D: --dup 10MB\n";
+    std::wcout << L"  mftscan D: --watch\n";
     std::wcout << L"  mftscan D: --search \"*.iso\" --min-size 1GB\n";
     std::wcout << L"  mftscan D: --top 25\n";
-    std::wcout << L"  mftscan D: --du\n";
-    std::wcout << L"  mftscan D: --deleted\n";
-    std::wcout << L"  mftscan C: --ext \"log,tmp,dmp\" --json\n\n";
+    std::wcout << L"  mftscan D: --du\n\n";
 }
 
 } // namespace mftscan
@@ -73,6 +80,10 @@ int wmain(int argc, wchar_t* argv[]) {
 
     wchar_t drive_letter = L'D';
     QueryFilter filter;
+    bool mode_tui = false;
+    bool mode_dup = false;
+    uint64_t dup_min_size = 4096;
+    bool mode_watch = false;
     bool mode_top = false;
     size_t top_limit = 20;
     bool mode_du = false;
@@ -92,14 +103,23 @@ int wmain(int argc, wchar_t* argv[]) {
             return 0;
         }
         if (arg == L"-v" || arg == L"--version") {
-            std::wcout << L"mftscan 0.1.0 (Windows x64/ARM64)\n";
+            std::wcout << L"mftscan 0.2.0 (Windows x64/ARM64)\n";
             return 0;
         }
         if (arg.size() == 2 && arg[1] == L':' && iswalpha(arg[0])) {
             drive_letter = arg[0];
             continue;
         }
-        if (arg == L"-s" || arg == L"--search") {
+        if (arg == L"-i" || arg == L"--tui") {
+            mode_tui = true;
+        } else if (arg == L"--dup") {
+            mode_dup = true;
+            if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
+                dup_min_size = parse_size_string(argv[++i]);
+            }
+        } else if (arg == L"--watch") {
+            mode_watch = true;
+        } else if (arg == L"-s" || arg == L"--search") {
             if (i + 1 < argc) filter.name_pattern = argv[++i];
         } else if (arg == L"-r" || arg == L"--regex") {
             if (i + 1 < argc) filter.regex_str = argv[++i];
@@ -154,7 +174,41 @@ int wmain(int argc, wchar_t* argv[]) {
         }
     }
 
-    if (!output_json && !output_csv) {
+    // Watch mode: Monitor live USN journal events
+    if (mode_watch) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        UsnMonitor monitor(vr);
+        auto q_res = monitor.query_journal();
+        if (!q_res) {
+            std::wcerr << L"USN Journal query failed: " << q_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        uint64_t curr_usn = q_res.value().NextUsn;
+        std::wcout << L"Watching live changes on volume " << drive_letter << L": (Starting USN: " << curr_usn << L")...\n";
+        std::wcout << L"Press Ctrl+C to stop.\n\n";
+
+        while (true) {
+            auto read_res = monitor.read_changes(curr_usn, 100, [&](const UsnChangeRecord& c) {
+                Formatter::print_usn_change(c);
+                return true;
+            });
+
+            if (read_res) {
+                curr_usn = read_res.value();
+            }
+            Sleep(250);
+        }
+    }
+
+    if (!output_json && !output_csv && !mode_tui) {
         Formatter::print_banner();
     }
 
@@ -162,7 +216,7 @@ int wmain(int argc, wchar_t* argv[]) {
     Result<std::vector<RecordInfo>> scan_res;
 
     if (force_fallback || !PrivilegeManager::is_elevated_admin()) {
-        if (!output_json && !output_csv) {
+        if (!output_json && !output_csv && !mode_tui) {
             if (!PrivilegeManager::is_elevated_admin() && !force_fallback) {
                 std::wcout << L"[NOTE] Running without elevated administrator privileges.\n";
                 std::wcout << L"       Switching to standard Win32 directory traversal engine.\n";
@@ -179,9 +233,15 @@ int wmain(int argc, wchar_t* argv[]) {
         return 1;
     }
 
-    const auto& records = scan_res.value();
+    auto records = std::move(scan_res.value());
     const auto& stats = scanner.stats();
     const auto& geom = scanner.geometry();
+
+    if (mode_tui) {
+        TuiViewer viewer(std::move(records), geom);
+        viewer.run();
+        return 0;
+    }
 
     if (output_json) {
         std::cout << Formatter::to_json(records, stats, geom);
@@ -195,7 +255,10 @@ int wmain(int argc, wchar_t* argv[]) {
 
     Formatter::print_scan_summary(stats, geom);
 
-    if (mode_top) {
+    if (mode_dup) {
+        auto dup_report = DuplicateDetector::find_duplicates(records, dup_min_size);
+        Formatter::print_duplicates_table(dup_report);
+    } else if (mode_top) {
         auto top_files = DiskUsageAnalyzer::top_largest_files(records, top_limit);
         Formatter::print_top_files_table(top_files);
     } else if (mode_du) {

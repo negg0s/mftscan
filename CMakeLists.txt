@@ -48,23 +48,33 @@ endif()
 # Core static library
 add_library(mftscan_core STATIC
     include/mftscan/common.hpp
-    include/mftscan/ntfs_defs.hpp
-    include/mftscan/privileges.hpp
-    include/mftscan/volume.hpp
-    include/mftscan/record_parser.hpp
-    include/mftscan/path_builder.hpp
-    include/mftscan/query.hpp
+    include/mftscan/data_run.hpp
     include/mftscan/disk_usage.hpp
-    include/mftscan/scanner.hpp
+    include/mftscan/duplicate_detector.hpp
     include/mftscan/formatter.hpp
-    src/privileges.cpp
-    src/volume.cpp
-    src/record_parser.cpp
-    src/path_builder.cpp
-    src/query.cpp
+    include/mftscan/ntfs_defs.hpp
+    include/mftscan/path_builder.hpp
+    include/mftscan/privileges.hpp
+    include/mftscan/query.hpp
+    include/mftscan/raw_streamer.hpp
+    include/mftscan/record_parser.hpp
+    include/mftscan/scanner.hpp
+    include/mftscan/tui.hpp
+    include/mftscan/usn_monitor.hpp
+    include/mftscan/volume.hpp
+    src/data_run.cpp
     src/disk_usage.cpp
-    src/scanner.cpp
+    src/duplicate_detector.cpp
     src/formatter.cpp
+    src/path_builder.cpp
+    src/privileges.cpp
+    src/query.cpp
+    src/raw_streamer.cpp
+    src/record_parser.cpp
+    src/scanner.cpp
+    src/tui.cpp
+    src/usn_monitor.cpp
+    src/volume.cpp
 )
 
 target_include_directories(mftscan_core PUBLIC include)

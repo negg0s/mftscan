@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-11-07
+
+### Added
+- Direct physical MFT extent block streaming (`RawMftStreamer`): decodes `$DATA` mapping pairs from Record 0 to stream the entire MFT in aligned 1 MB blocks directly from raw volume extents, bypassing record-by-record IOCTL overhead.
+- NTFS mapping pairs decoder (`DataRunDecoder`): parses variable-length compressed data runs with sign-extended LCN deltas, VCN tracking, and sparse extent detection.
+- Fast duplicate file fingerprinter (`DuplicateDetector`): groups files by exact byte size, computes 4 KB partial FNV-1a hashes to eliminate unique candidates without full reads, and computes full hashes to detect duplicate files and calculate reclaimable storage.
+- Real-time USN Journal filesystem change monitor (`UsnMonitor`): reads change records via `FSCTL_READ_USN_JOURNAL` (`--watch`) displaying live file creations, deletions, renames, and data overwrites.
+- Interactive fullscreen Terminal User Interface (`TuiViewer`): launched with `-i` or `--tui`, providing real-time search-as-you-type filtering, column sorting (Name, Size, Date, Path via F1-F4), and keyboard navigation using pure Win32 Virtual Terminal escape sequences.
+
 ## [0.1.0] - 2026-11-07
 
 ### Added

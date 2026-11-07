@@ -6,10 +6,14 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 
 ## Features
 
-- **Direct MFT Parsing**: Directly queries the NTFS Master File Table using `FSCTL_GET_NTFS_VOLUME_DATA` and `FSCTL_GET_NTFS_FILE_RECORD`.
+- **Direct MFT Extent Streaming**: Decodes `$DATA` mapping pairs from Record 0 to stream raw MFT records in 1 MB aligned blocks directly from physical extents.
+- **Mapping Pairs Decoder**: Parses variable-length compressed NTFS data runs with sign-extended LCN deltas, VCN tracking, and sparse run handling.
 - **Binary Fixup Engine**: Decodes NTFS Update Sequence Array tags, handling torn writes and recovering true sector content.
 - **Path Tree Reconstruction**: Resolves full directory paths using parent file reference numbers (FRNs) with cached tree lookup and cycle prevention.
 - **Attribute Decoding**: Parses `$STANDARD_INFORMATION` (timestamps, DOS attributes), `$FILE_NAME` (POSIX/Win32/DOS namespaces), and `$DATA` (resident and non-resident stream lengths).
+- **Duplicate File Detection**: Groups files by exact size and computes partial and full FNV-1a hashes to identify duplicate files and calculate reclaimable space (`--dup`).
+- **Real-Time Change Monitor**: Reads live filesystem operations via `FSCTL_READ_USN_JOURNAL` (`--watch`), showing creations, deletions, renames, and writes as they happen.
+- **Interactive Fullscreen TUI**: Terminal UI (`-i`, `--tui`) featuring real-time filter-as-you-type search and instant column sorting (F1-F4) using pure Win32 Virtual Terminal escape sequences.
 - **Alternate Data Stream (ADS) Discovery**: Detects secondary named `$DATA` streams attached to files.
 - **Deleted Record Recovery**: Identifies unallocated MFT records (`--deleted`) whose metadata remains intact before sector overwrites.
 - **Disk Usage Analysis**: Calculates top space-consuming files (`--top`), directory aggregation rollups (`--du`), and file type histograms (`--types`).
@@ -58,7 +62,10 @@ Search Filters:
   --deleted                Scan for deleted / unallocated MFT file records
   --ads                    Search Alternate Data Streams (:stream)
 
-Analysis Modes:
+Analysis & Views:
+  -i, --tui                Interactive fullscreen Terminal UI with live filtering
+  --dup [min_size]         Scan for duplicate files by size and hash (default: 4KB)
+  --watch                  Live monitor real-time volume changes via USN Journal
   --top [N]                List top N largest files (default: 20)
   --du [N]                 Analyze top directory disk consumption (default: 20)
   --types [N]              Show file extension breakdown histogram (default: 20)
@@ -75,6 +82,15 @@ Output Formats:
 ### Examples
 
 ```powershell
+# Interactive fullscreen Terminal UI
+mftscan D: -i
+
+# Find duplicate files consuming disk space
+mftscan D: --dup 10MB
+
+# Live watch filesystem change events on volume D:
+mftscan D: --watch
+
 # Search drive D: for large video or disk image files
 mftscan D: --search "*.iso" --min-size 1GB
 

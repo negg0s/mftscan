@@ -166,6 +166,35 @@ void Formatter::print_extension_histogram_table(const std::vector<ExtensionStat>
     std::wcout << L"------------------------------------------------------------------------\n\n";
 }
 
+void Formatter::print_duplicates_table(const DuplicateReport& report) {
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+    std::wcout << L" Duplicate Files Report | Found: " << report.total_duplicate_files
+               << L" files | Reclaimable Space: " << format_bytes(report.total_wasted_bytes) << L"\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+
+    if (report.groups.empty()) {
+        std::wcout << L"No duplicate files detected with current threshold.\n\n";
+        return;
+    }
+
+    for (size_t i = 0; i < report.groups.size(); ++i) {
+        const auto& g = report.groups[i];
+        std::wcout << L"Group #" << (i + 1) << L" (" << g.paths.size() << L" copies, "
+                   << format_bytes(g.file_size) << L" each, Wasted: " << format_bytes(g.wasted_bytes) << L"):\n";
+        for (const auto& p : g.paths) {
+            std::wcout << L"  " << p << L"\n";
+        }
+        std::wcout << L"\n";
+    }
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
+}
+
+void Formatter::print_usn_change(const UsnChangeRecord& change) {
+    std::wcout << L"[" << format_filetime(change.timestamp) << L"] "
+               << std::left << std::setw(20) << change.reason_string
+               << L" " << change.file_name << L" (USN: " << change.usn << L")\n";
+}
+
 static std::string escape_json_string(const std::wstring& ws) {
     std::ostringstream oss;
     for (wchar_t wc : ws) {

@@ -10,6 +10,8 @@
 
 #include "mftscan/common.hpp"
 #include "mftscan/disk_usage.hpp"
+#include "mftscan/duplicate_detector.hpp"
+#include "mftscan/usn_monitor.hpp"
 
 #include <string>
 #include <vector>
@@ -27,6 +29,8 @@ public:
     static void print_top_files_table(const std::vector<RecordInfo>& records);
     static void print_top_directories_table(const std::vector<DirectoryUsage>& dirs);
     static void print_extension_histogram_table(const std::vector<ExtensionStat>& stats);
+    static void print_duplicates_table(const DuplicateReport& report);
+    static void print_usn_change(const UsnChangeRecord& change);
 
     static std::string to_json(
         const std::vector<RecordInfo>& records,

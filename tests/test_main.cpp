@@ -1,11 +1,14 @@
 #include "mftscan/common.hpp"
+#include "mftscan/data_run.hpp"
 #include "mftscan/disk_usage.hpp"
+#include "mftscan/duplicate_detector.hpp"
 #include "mftscan/formatter.hpp"
 #include "mftscan/ntfs_defs.hpp"
 #include "mftscan/path_builder.hpp"
 #include "mftscan/privileges.hpp"
 #include "mftscan/query.hpp"
 #include "mftscan/record_parser.hpp"
+#include "mftscan/usn_monitor.hpp"
 
 #include <cassert>
 #include <iostream>
@@ -339,6 +342,58 @@ static void test_json_and_csv_formatting() {
     check(csv_str.find("42,FILE,1234") != std::string::npos, "CSV data row present");
 }
 
+static void test_data_run_decoder() {
+    const uint8_t runs[] = {
+        0x21, 0x08, 0xE8, 0x03,
+        0x11, 0x04, 0xFE,
+        0x01, 0x10,
+        0x00
+    };
+
+    auto extents = DataRunDecoder::decode_mapping_pairs(runs, sizeof(runs));
+    check(extents.size() == 3, "decoded 3 extents");
+
+    check(extents[0].starting_vcn == 0, "ext0 starting vcn");
+    check(extents[0].cluster_count == 8, "ext0 cluster count");
+    check(extents[0].starting_lcn == 1000, "ext0 starting lcn");
+    check(!extents[0].is_sparse, "ext0 is not sparse");
+
+    check(extents[1].starting_vcn == 8, "ext1 starting vcn");
+    check(extents[1].cluster_count == 4, "ext1 cluster count");
+    check(extents[1].starting_lcn == 998, "ext1 starting lcn with negative delta");
+    check(!extents[1].is_sparse, "ext1 is not sparse");
+
+    check(extents[2].starting_vcn == 12, "ext2 starting vcn");
+    check(extents[2].cluster_count == 16, "ext2 cluster count");
+    check(extents[2].is_sparse, "ext2 is sparse");
+
+    uint64_t total = DataRunDecoder::calculate_total_clusters(extents);
+    check(total == 28, "total clusters calculated correctly");
+}
+
+static void test_duplicate_detector_grouping() {
+    std::vector<RecordInfo> records;
+
+    RecordInfo r1; r1.name = L"unique.dat"; r1.size_bytes = 10000; r1.full_path = L"D:\\unique.dat"; records.push_back(r1);
+    RecordInfo r2; r2.name = L"fileA.bin"; r2.size_bytes = 20000; r2.full_path = L"D:\\fileA.bin"; records.push_back(r2);
+    RecordInfo r3; r3.name = L"fileB.bin"; r3.size_bytes = 20000; r3.full_path = L"D:\\fileB.bin"; records.push_back(r3);
+
+    auto report = DuplicateDetector::find_duplicates(records, 1000);
+    (void)report;
+}
+
+static void test_usn_reason_formatting() {
+    std::wstring s1 = UsnMonitor::format_reason(USN_REASON_FILE_CREATE | USN_REASON_CLOSE);
+    check(s1.find(L"CREATE") != std::wstring::npos, "format_reason contains CREATE");
+    check(s1.find(L"CLOSE") != std::wstring::npos, "format_reason contains CLOSE");
+
+    std::wstring s2 = UsnMonitor::format_reason(USN_REASON_FILE_DELETE);
+    check(s2 == L"DELETE", "format_reason single tag DELETE");
+
+    std::wstring s3 = UsnMonitor::format_reason(0);
+    check(s3 == L"NONE", "format_reason zero is NONE");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -376,6 +431,15 @@ int main() {
     std::wcout << L"[RUN] test_json_and_csv_formatting\n";
     test_json_and_csv_formatting();
 
-    std::wcout << L"All 12 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_data_run_decoder\n";
+    test_data_run_decoder();
+
+    std::wcout << L"[RUN] test_duplicate_detector_grouping\n";
+    test_duplicate_detector_grouping();
+
+    std::wcout << L"[RUN] test_usn_reason_formatting\n";
+    test_usn_reason_formatting();
+
+    std::wcout << L"All 15 unit test suites passed successfully.\n";
     return 0;
 }

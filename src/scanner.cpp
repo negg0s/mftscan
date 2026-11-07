@@ -1,4 +1,5 @@
 #include "mftscan/scanner.hpp"
+#include "mftscan/raw_streamer.hpp"
 #include "mftscan/record_parser.hpp"
 
 #include <chrono>
@@ -36,27 +37,16 @@ Result<std::vector<RecordInfo>> VolumeScanner::scan(
     raw_candidates.reserve(100000);
 
     const uint32_t rec_size = geom.bytes_per_record;
-    constexpr uint32_t kBatchRecords = 128;
-    std::vector<uint8_t> batch_buf(kBatchRecords * rec_size);
+    bool streamed_ok = false;
 
-    uint64_t curr_record = 0;
-
-    while (curr_record < total_records) {
-        const uint32_t to_fetch = static_cast<uint32_t>((std::min<uint64_t>)(kBatchRecords, total_records - curr_record));
-
-        for (uint32_t i = 0; i < to_fetch; ++i) {
-            uint8_t* slot = batch_buf.data() + (i * rec_size);
-            auto read_res = reader_.read_file_record(curr_record + i, slot, rec_size);
-            if (!read_res) {
-                memset(slot, 0, rec_size);
-            }
-        }
-
+    // Fast Path: Direct MFT Extent Block Streaming (1 MB blocks)
+    RawMftStreamer streamer(reader_);
+    auto stream_res = streamer.stream_all_records(1024 * 1024, [&](uint64_t start_record, const uint8_t* block_data, uint32_t record_count) {
         auto parsed_batch = RecordParser::parse_batch(
-            batch_buf.data(),
-            to_fetch,
+            block_data,
+            record_count,
             rec_size,
-            curr_record,
+            start_record,
             geom.bytes_per_sector
         );
 
@@ -74,10 +64,61 @@ Result<std::vector<RecordInfo>> VolumeScanner::scan(
             raw_candidates.push_back(std::move(r));
         }
 
-        curr_record += to_fetch;
-
         if (on_progress) {
-            on_progress(curr_record, total_records);
+            on_progress(start_record + record_count, total_records);
+        }
+        return true;
+    });
+
+    if (stream_res && stream_res.value() > 0) {
+        streamed_ok = true;
+    }
+
+    // Secondary Path: Batch IOCTL Enumeration
+    if (!streamed_ok) {
+        constexpr uint32_t kBatchRecords = 128;
+        std::vector<uint8_t> batch_buf(kBatchRecords * rec_size);
+
+        uint64_t curr_record = 0;
+
+        while (curr_record < total_records) {
+            const uint32_t to_fetch = static_cast<uint32_t>((std::min<uint64_t>)(kBatchRecords, total_records - curr_record));
+
+            for (uint32_t i = 0; i < to_fetch; ++i) {
+                uint8_t* slot = batch_buf.data() + (i * rec_size);
+                auto read_res = reader_.read_file_record(curr_record + i, slot, rec_size);
+                if (!read_res) {
+                    memset(slot, 0, rec_size);
+                }
+            }
+
+            auto parsed_batch = RecordParser::parse_batch(
+                batch_buf.data(),
+                to_fetch,
+                rec_size,
+                curr_record,
+                geom.bytes_per_sector
+            );
+
+            for (auto& r : parsed_batch) {
+                stats_.total_records_read++;
+                if (r.is_deleted) {
+                    stats_.deleted_records_found++;
+                } else if (r.is_directory) {
+                    stats_.active_directories++;
+                    path_builder_.add_directory(r.record_index, r.parent_record_index, r.name);
+                } else {
+                    stats_.active_files++;
+                }
+
+                raw_candidates.push_back(std::move(r));
+            }
+
+            curr_record += to_fetch;
+
+            if (on_progress) {
+                on_progress(curr_record, total_records);
+            }
         }
     }
 
