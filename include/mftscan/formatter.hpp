@@ -26,6 +26,7 @@
 #include "mftscan/logfile.hpp"
 #include "mftscan/mft_slack.hpp"
 #include "mftscan/namespace_auditor.hpp"
+#include "mftscan/unallocated_analyzer.hpp"
 #include "mftscan/object_id.hpp"
 #include "mftscan/quota.hpp"
 #include "mftscan/reparse.hpp"
@@ -87,6 +88,8 @@ public:
     static void print_extend_report(const ExtendReport& report);
     static void print_namespace_report(const NamespaceReport& report);
     static void print_inlining_report(const InliningReport& report);
+    static void print_unallocated_report(const UnallocatedReport& report);
+    static void print_usn_dump_report(const UsnDumpReport& report);
 
     static std::string to_json(
         const std::vector<RecordInfo>& records,

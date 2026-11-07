@@ -28,6 +28,7 @@
 #include "mftscan/extend.hpp"
 #include "mftscan/inlining.hpp"
 #include "mftscan/namespace_auditor.hpp"
+#include "mftscan/unallocated_analyzer.hpp"
 #include "mftscan/usn_journal.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
@@ -123,6 +124,10 @@ static void print_help() {
     std::wcout << L"  --extend                 Inspect NTFS extension directory ($Extend) metadata subsystems\n";
     std::wcout << L"  --namespace-audit, --posix-files Audit file namespace anomalies and hidden POSIX names\n";
     std::wcout << L"  --inlining, --resident-advisor   Identify small non-resident files eligible for MFT inlining\n";
+    std::wcout << L"  --unallocated, --freelist Audit unallocated MFT records, deleted spans, and recoverable files\n";
+    std::wcout << L"  --usn-dump               Stream raw sequential transaction log from USN Journal\n";
+    std::wcout << L"  --usn-reason <reason>    Filter USN dump by operation reason (e.g. CREATE, DELETE, RENAME)\n";
+    std::wcout << L"  --usn-limit <N>          Maximum USN records to stream (default: 100)\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -192,6 +197,10 @@ int wmain(int argc, wchar_t* argv[]) {
     bool mode_extend = false;
     bool mode_namespace = false;
     bool mode_inlining = false;
+    bool mode_unallocated = false;
+    bool mode_usn_dump = false;
+    std::wstring usn_reason_filter;
+    size_t usn_limit = 100;
     uint64_t carve_frn = 0;
     std::wstring carve_out_path;
     std::wstring carve_stream_name;
@@ -309,6 +318,14 @@ int wmain(int argc, wchar_t* argv[]) {
             mode_namespace = true;
         } else if (arg == L"--inlining" || arg == L"--resident-advisor") {
             mode_inlining = true;
+        } else if (arg == L"--unallocated" || arg == L"--freelist") {
+            mode_unallocated = true;
+        } else if (arg == L"--usn-dump") {
+            mode_usn_dump = true;
+        } else if (arg == L"--usn-reason") {
+            if (i + 1 < argc) usn_reason_filter = argv[++i];
+        } else if (arg == L"--usn-limit") {
+            if (i + 1 < argc && iswdigit(argv[i + 1][0])) usn_limit = static_cast<size_t>(_wtoi(argv[++i]));
         } else if (arg == L"--carve-deleted") {
             mode_carve_deleted = true;
             if (i + 1 < argc) carve_deleted_dir = argv[++i];
@@ -623,6 +640,32 @@ int wmain(int argc, wchar_t* argv[]) {
         return 0;
     }
 
+    // USN Sequential Dump mode: Stream raw sequential operations from transaction log
+    if (mode_usn_dump) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        UsnDumpFilter u_filter;
+        u_filter.limit = usn_limit;
+        if (!usn_reason_filter.empty()) {
+            u_filter.reason_mask = UsnJournalAnalyzer::parse_reason_string(usn_reason_filter);
+        }
+
+        auto dump_res = UsnJournalAnalyzer::dump_journal(vr, u_filter);
+        if (!dump_res) {
+            std::wcerr << L"Failed to dump USN journal: " << dump_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        Formatter::print_usn_dump_report(dump_res.value());
+        return 0;
+    }
+
     // MFT Slack mode: Direct record slack space inspection and carving
     if (mode_mft_slack) {
         Formatter::print_banner();
@@ -910,6 +953,9 @@ int wmain(int argc, wchar_t* argv[]) {
     } else if (mode_inlining) {
         auto inl_report = InliningAdvisor::analyze(records, geom.bytes_per_cluster, top_limit);
         Formatter::print_inlining_report(inl_report);
+    } else if (mode_unallocated) {
+        auto unalloc_report = UnallocatedAnalyzer::analyze(records, top_limit);
+        Formatter::print_unallocated_report(unalloc_report);
     } else if (mode_objid) {
         VolumeReader vr(drive_letter);
         vr.open();

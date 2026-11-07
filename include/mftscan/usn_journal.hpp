@@ -47,6 +47,21 @@ struct UsnHistoryReport {
     std::vector<UsnHistoryEntry> entries;
 };
 
+struct UsnDumpFilter {
+    uint32_t reason_mask{0};
+    size_t limit{100};
+    uint64_t start_usn{0};
+};
+
+struct UsnDumpReport {
+    uint64_t journal_id{0};
+    uint64_t lowest_usn{0};
+    uint64_t next_usn{0};
+    uint32_t applied_reason_mask{0};
+    std::wstring reason_filter_name;
+    std::vector<UsnHistoryEntry> entries;
+};
+
 class UsnJournalAnalyzer {
 public:
     static Result<UsnJournalStats> query_stats(VolumeReader& volume);
@@ -57,8 +72,16 @@ public:
         size_t max_events = 50
     );
 
+    static Result<UsnDumpReport> dump_journal(
+        VolumeReader& volume,
+        const UsnDumpFilter& filter
+    );
+
+    static uint32_t parse_reason_string(const std::wstring& reason_str);
+
     static void print_stats_report(const UsnJournalStats& stats);
     static void print_history_report(const UsnHistoryReport& report);
+    static void print_dump_report(const UsnDumpReport& report);
 };
 
 } // namespace mftscan

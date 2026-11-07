@@ -38,6 +38,8 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **NTFS Extension Directory ($Extend) Subsystems Explorer**: Decodes Record 11 (`$Extend`), identifying and inspecting supplementary NTFS metadata subsystems including user quotas (`$Quota`), object IDs (`$ObjId`), change journaling (`$UsnJrnl`), reparse indexes (`$Reparse`), and transactional logs (`$RmMetadata`) (`--extend`).
 - **NTFS File Namespace Anomaly & Stealth File Auditor**: Scans `$FILE_NAME` records across all 4 namespaces (POSIX, Win32, DOS, Win32&DOS), detecting POSIX-only files, trailing dots and trailing spaces (which bypass standard Win32 path canonicalization), illegal Win32 characters (`*`, `?`, `:`, `<`, `>`, `|`), and reserved DOS device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`) (`--namespace-audit`, `--posix-files`).
 - **MFT Resident Stream Inlining Advisor**: Identifies small non-resident files (size <= 700 bytes) allocating whole physical disk clusters that can fit residently inside existing MFT record bodies, computing reclaimable clusters, disk space savings, and potential packing ratios (`--inlining`, `--resident-advisor`).
+- **MFT Unallocated Space & Deletion Map Forensics**: Audits the distribution of deleted and unallocated records across the MFT, identifying contiguous deleted record spans (carving target zones), computing unallocated ratios, breaking down recently removed files by extension, and cataloging recoverable files with intact resident or non-resident streams (`--unallocated`, `--freelist`).
+- **USN Journal Sequential Transaction Log Streamer**: Streams raw chronological change events from the active USN Journal (`--usn-dump`), supporting operation reason filtering (`--usn-reason <reason>`, e.g. `CREATE`, `DELETE`, `RENAME`, `SECURITY`, `OVERWRITE`) and custom record limits (`--usn-limit <N>`).
 - **Cluster Allocation & Free-Space Fragmentation Map**: Analyzes the volume cluster allocation bitmap, computing contiguous free extent counts, largest contiguous block, average extent length, free space fragmentation index, and an ASCII cluster allocation map (`--bitmap`, `--free-space`).
 - **NTFS Transaction Journal ($LogFile) Analyzer**: Parses the restart page header (`RSTR`), validating USA fixups, LSN checkpoint tracking, active client lists, and clean vs dirty unmount states (`--logfile`, `--journal`).
 - **Multi-Record Attribute List Decoder**: Decodes `$ATTRIBUTE_LIST` (0x20) mappings to track attributes spanning across multiple base and child MFT record segments for fragmented files and extensive streams.
@@ -132,6 +134,10 @@ Analysis & Views:
   --extend                 Inspect NTFS extension directory ($Extend) metadata subsystems
   --namespace-audit, --posix-files Audit file namespace anomalies and hidden POSIX names
   --inlining, --resident-advisor   Identify small non-resident files eligible for MFT inlining
+  --unallocated, --freelist Audit unallocated MFT records, deleted spans, and recoverable files
+  --usn-dump               Stream raw sequential transaction log from USN Journal
+  --usn-reason <reason>    Filter USN dump by operation reason (e.g. CREATE, DELETE, RENAME)
+  --usn-limit <N>          Maximum USN records to stream (default: 100)
   --ls <dir_FRN>           List directory index contents and carved slack from $INDEX_ROOT
   --watch                  Live monitor real-time volume changes via USN Journal
   --top [N]                List top N largest files (default: 20)
@@ -275,6 +281,15 @@ mftscan D: --namespace-audit
 
 # Identify small non-resident files eligible for MFT inlining to save disk clusters
 mftscan D: --inlining
+
+# Audit unallocated MFT records, deleted spans, and recoverable file candidates
+mftscan D: --unallocated
+
+# Stream raw sequential transaction log from USN Journal
+mftscan D: --usn-dump --usn-limit 50
+
+# Stream only file creation and deletion events from USN Journal
+mftscan D: --usn-dump --usn-reason CREATE
 
 # Export all executables to JSON
 mftscan D: --ext "exe,dll" --json > binaries.json

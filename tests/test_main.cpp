@@ -29,6 +29,7 @@
 #include "mftscan/extend.hpp"
 #include "mftscan/inlining.hpp"
 #include "mftscan/namespace_auditor.hpp"
+#include "mftscan/unallocated_analyzer.hpp"
 #include "mftscan/usn_journal.hpp"
 #include <cstring>
 #include "mftscan/bitmap.hpp"
@@ -1783,6 +1784,112 @@ void test_inlining_advisor() {
     check(rep.potential_resident_ratio > rep.current_resident_ratio, "potential_resident_ratio > current_resident_ratio");
 }
 
+
+void test_usn_reason_parser_and_dump_filter() {
+    uint32_t mask1 = UsnJournalAnalyzer::parse_reason_string(L"CREATE");
+    check((mask1 & 0x00000100) != 0, "CREATE mask matches USN_REASON_FILE_CREATE");
+
+    uint32_t mask2 = UsnJournalAnalyzer::parse_reason_string(L"DELETE");
+    check((mask2 & 0x00000200) != 0, "DELETE mask matches USN_REASON_FILE_DELETE");
+
+    uint32_t mask3 = UsnJournalAnalyzer::parse_reason_string(L"SECURITY");
+    check((mask3 & 0x00000800) != 0, "SECURITY mask matches USN_REASON_SECURITY_CHANGE");
+
+    uint32_t mask4 = UsnJournalAnalyzer::parse_reason_string(L"RENAME");
+    check((mask4 & 0x00001000) != 0, "RENAME mask matches USN_REASON_RENAME_OLD_NAME");
+    check((mask4 & 0x00002000) != 0, "RENAME mask matches USN_REASON_RENAME_NEW_NAME");
+
+    uint32_t mask5 = UsnJournalAnalyzer::parse_reason_string(L"0x80000000");
+    check(mask5 == 0x80000000, "Hex string parsed correctly");
+
+    uint32_t mask6 = UsnJournalAnalyzer::parse_reason_string(L"");
+    check(mask6 == 0, "Empty string returns 0");
+}
+
+void test_unallocated_analyzer() {
+    std::vector<RecordInfo> records;
+
+    RecordInfo r1;
+    r1.record_index = 50;
+    r1.is_deleted = false;
+    r1.name = L"active1.txt";
+    records.push_back(r1);
+
+    RecordInfo r2;
+    r2.record_index = 51;
+    r2.is_deleted = true;
+    r2.name = L"old_document.docx";
+    r2.size_bytes = 5000;
+    r2.allocated_bytes = 8192;
+    r2.is_resident = false;
+    records.push_back(r2);
+
+    RecordInfo r3;
+    r3.record_index = 52;
+    r3.is_deleted = true;
+    r3.name = L"notes.txt";
+    r3.size_bytes = 200;
+    r3.allocated_bytes = 0;
+    r3.is_resident = true;
+    records.push_back(r3);
+
+    RecordInfo r4;
+    r4.record_index = 53;
+    r4.is_deleted = true;
+    r4.name = L"script.py";
+    r4.size_bytes = 1500;
+    r4.allocated_bytes = 4096;
+    r4.is_resident = false;
+    records.push_back(r4);
+
+    RecordInfo r5;
+    r5.record_index = 54;
+    r5.is_deleted = false;
+    r5.name = L"active2.txt";
+    records.push_back(r5);
+
+    RecordInfo r6;
+    r6.record_index = 55;
+    r6.is_deleted = true;
+    r6.name = L"image.png";
+    r6.size_bytes = 100000;
+    r6.allocated_bytes = 102400;
+    r6.is_resident = false;
+    records.push_back(r6);
+
+    RecordInfo r7;
+    r7.record_index = 56;
+    r7.is_deleted = true;
+    r7.name = L"";
+    r7.size_bytes = 0;
+    r7.allocated_bytes = 0;
+    records.push_back(r7);
+
+    RecordInfo r8;
+    r8.record_index = 57;
+    r8.is_deleted = false;
+    r8.name = L"active3.txt";
+    records.push_back(r8);
+
+    auto rep = UnallocatedAnalyzer::analyze(records, 10);
+    check(rep.total_records == 8, "total_records == 8");
+    check(rep.allocated_records == 3, "allocated_records == 3");
+    check(rep.unallocated_records == 5, "unallocated_records == 5");
+    check(rep.recoverable_with_name == 4, "recoverable_with_name == 4");
+    check(rep.recoverable_resident == 1, "recoverable_resident == 1");
+    check(rep.recoverable_non_resident == 3, "recoverable_non_resident == 3");
+    check(rep.recoverable_payload_bytes == 106700, "recoverable_payload_bytes == 106700");
+    check(rep.contiguous_deleted_spans_count == 2, "contiguous_deleted_spans_count == 2");
+    check(rep.max_contiguous_deleted_records == 3, "max_contiguous_deleted_records == 3");
+    check(rep.top_deleted_spans.size() == 2, "top_deleted_spans size == 2");
+    check(rep.top_deleted_spans[0].record_count == 3, "first span has 3 records");
+    check(rep.extension_breakdown[L"docx"] == 1, "extension_breakdown docx == 1");
+    check(rep.extension_breakdown[L"txt"] == 1, "extension_breakdown txt == 1");
+    check(rep.top_recoverable_files.size() == 4, "top_recoverable_files size == 4");
+    check(rep.top_recoverable_files[0].name == L"image.png", "top recoverable file is image.png");
+    check(rep.top_recoverable_files[0].size_bytes == 100000, "top recoverable file size is 100000");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -1918,6 +2025,12 @@ int main() {
     std::wcout << L"[RUN] test_inlining_advisor\n";
     test_inlining_advisor();
 
-    std::wcout << L"All 46 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_usn_reason_parser_and_dump_filter\n";
+    test_usn_reason_parser_and_dump_filter();
+
+    std::wcout << L"[RUN] test_unallocated_analyzer\n";
+    test_unallocated_analyzer();
+
+    std::wcout << L"All 48 unit test suites passed successfully.\n";
     return 0;
 }

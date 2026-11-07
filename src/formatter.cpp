@@ -700,6 +700,14 @@ void Formatter::print_inlining_report(const InliningReport& report) {
     InliningAdvisor::print_report(report);
 }
 
+void Formatter::print_unallocated_report(const UnallocatedReport& report) {
+    UnallocatedAnalyzer::print_report(report);
+}
+
+void Formatter::print_usn_dump_report(const UsnDumpReport& report) {
+    UsnJournalAnalyzer::print_dump_report(report);
+}
+
 
 
 static std::string escape_json_string(const std::wstring& ws) {

@@ -88,6 +88,7 @@ add_library(mftscan_core STATIC
     include/mftscan/thread_pool.hpp
     include/mftscan/timestomp.hpp
     include/mftscan/tui.hpp
+    include/mftscan/unallocated_analyzer.hpp
     include/mftscan/upcase.hpp
     include/mftscan/usn_journal.hpp
     include/mftscan/usn_monitor.hpp
@@ -132,6 +133,7 @@ add_library(mftscan_core STATIC
     src/thread_pool.cpp
     src/timestomp.cpp
     src/tui.cpp
+    src/unallocated_analyzer.cpp
     src/upcase.cpp
     src/usn_journal.cpp
     src/usn_monitor.cpp
