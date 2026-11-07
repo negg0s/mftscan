@@ -26,6 +26,8 @@
 #include "mftscan/volume_info.hpp"
 #include "mftscan/upcase.hpp"
 #include "mftscan/extend.hpp"
+#include "mftscan/inlining.hpp"
+#include "mftscan/namespace_auditor.hpp"
 #include "mftscan/usn_journal.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/carver.hpp"
@@ -119,6 +121,8 @@ static void print_help() {
     std::wcout << L"  --vol-info, --dirty      Inspect volume integrity flags and dirty state ($Volume)\n";
     std::wcout << L"  --upcase                 Inspect NTFS Unicode uppercase table ($UpCase) integrity\n";
     std::wcout << L"  --extend                 Inspect NTFS extension directory ($Extend) metadata subsystems\n";
+    std::wcout << L"  --namespace-audit, --posix-files Audit file namespace anomalies and hidden POSIX names\n";
+    std::wcout << L"  --inlining, --resident-advisor   Identify small non-resident files eligible for MFT inlining\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -186,6 +190,8 @@ int wmain(int argc, wchar_t* argv[]) {
     bool mode_volume_info = false;
     bool mode_upcase = false;
     bool mode_extend = false;
+    bool mode_namespace = false;
+    bool mode_inlining = false;
     uint64_t carve_frn = 0;
     std::wstring carve_out_path;
     std::wstring carve_stream_name;
@@ -299,6 +305,10 @@ int wmain(int argc, wchar_t* argv[]) {
             mode_upcase = true;
         } else if (arg == L"--extend") {
             mode_extend = true;
+        } else if (arg == L"--namespace-audit" || arg == L"--posix-files") {
+            mode_namespace = true;
+        } else if (arg == L"--inlining" || arg == L"--resident-advisor") {
+            mode_inlining = true;
         } else if (arg == L"--carve-deleted") {
             mode_carve_deleted = true;
             if (i + 1 < argc) carve_deleted_dir = argv[++i];
@@ -894,6 +904,12 @@ int wmain(int argc, wchar_t* argv[]) {
     } else if (mode_density) {
         auto density_rep = DensityAnalyzer::analyze(records, geom.bytes_per_cluster);
         Formatter::print_density_report(density_rep);
+    } else if (mode_namespace) {
+        auto ns_report = NamespaceAuditor::analyze(records);
+        Formatter::print_namespace_report(ns_report);
+    } else if (mode_inlining) {
+        auto inl_report = InliningAdvisor::analyze(records, geom.bytes_per_cluster, top_limit);
+        Formatter::print_inlining_report(inl_report);
     } else if (mode_objid) {
         VolumeReader vr(drive_letter);
         vr.open();

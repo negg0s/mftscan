@@ -22,8 +22,10 @@
 #include "mftscan/extended_attributes.hpp"
 #include "mftscan/fragmentation_analyzer.hpp"
 #include "mftscan/hardlink.hpp"
+#include "mftscan/inlining.hpp"
 #include "mftscan/logfile.hpp"
 #include "mftscan/mft_slack.hpp"
+#include "mftscan/namespace_auditor.hpp"
 #include "mftscan/object_id.hpp"
 #include "mftscan/quota.hpp"
 #include "mftscan/reparse.hpp"
@@ -83,6 +85,8 @@ public:
     static void print_volume_info_report(const VolumeInfoReport& report);
     static void print_upcase_report(const UpCaseReport& report);
     static void print_extend_report(const ExtendReport& report);
+    static void print_namespace_report(const NamespaceReport& report);
+    static void print_inlining_report(const InliningReport& report);
 
     static std::string to_json(
         const std::vector<RecordInfo>& records,

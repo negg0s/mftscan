@@ -65,9 +65,11 @@ add_library(mftscan_core STATIC
     include/mftscan/fragmentation_analyzer.hpp
     include/mftscan/hardlink.hpp
     include/mftscan/index_parser.hpp
+    include/mftscan/inlining.hpp
     include/mftscan/inspector.hpp
     include/mftscan/logfile.hpp
     include/mftscan/mft_slack.hpp
+    include/mftscan/namespace_auditor.hpp
     include/mftscan/ntfs_defs.hpp
     include/mftscan/object_id.hpp
     include/mftscan/path_builder.hpp
@@ -108,9 +110,11 @@ add_library(mftscan_core STATIC
     src/fragmentation_analyzer.cpp
     src/hardlink.cpp
     src/index_parser.cpp
+    src/inlining.cpp
     src/inspector.cpp
     src/logfile.cpp
     src/mft_slack.cpp
+    src/namespace_auditor.cpp
     src/object_id.cpp
     src/path_builder.cpp
     src/privileges.cpp

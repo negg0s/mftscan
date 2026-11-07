@@ -44,6 +44,8 @@ struct RecordInfo {
     uint32_t owner_id{0};
     uint32_t security_id{0};
     uint64_t quota_charged{0};
+    uint8_t file_name_namespace{1};
+    bool has_posix_namespace{false};
 };
 
 struct VolumeGeometry {

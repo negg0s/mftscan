@@ -27,6 +27,8 @@
 #include "mftscan/volume_info.hpp"
 #include "mftscan/upcase.hpp"
 #include "mftscan/extend.hpp"
+#include "mftscan/inlining.hpp"
+#include "mftscan/namespace_auditor.hpp"
 #include "mftscan/usn_journal.hpp"
 #include <cstring>
 #include "mftscan/bitmap.hpp"
@@ -1640,6 +1642,147 @@ static void test_extend_analyzer() {
     check(rep.total_metadata_bytes == 4096 + 8192 + 33554432 + 4096, "total_metadata_bytes matches sum");
 }
 
+
+void test_namespace_auditor() {
+    std::vector<RecordInfo> records;
+
+    RecordInfo r1;
+    r1.record_index = 100;
+    r1.name = L"normal_document.docx";
+    r1.full_path = L"D:\\Documents\\normal_document.docx";
+    r1.file_name_namespace = 1;
+    r1.has_posix_namespace = false;
+    records.push_back(r1);
+
+    RecordInfo r2;
+    r2.record_index = 101;
+    r2.name = L"posix_script.sh";
+    r2.full_path = L"D:\\posix_script.sh";
+    r2.file_name_namespace = 0;
+    r2.has_posix_namespace = true;
+    records.push_back(r2);
+
+    RecordInfo r3;
+    r3.record_index = 102;
+    r3.name = L"hidden.";
+    r3.full_path = L"D:\\hidden.";
+    r3.file_name_namespace = 0;
+    records.push_back(r3);
+
+    RecordInfo r4;
+    r4.record_index = 103;
+    r4.name = L"stealth ";
+    r4.full_path = L"D:\\stealth ";
+    r4.file_name_namespace = 0;
+    records.push_back(r4);
+
+    RecordInfo r5;
+    r5.record_index = 104;
+    r5.name = L"CON.txt";
+    r5.full_path = L"D:\\CON.txt";
+    r5.file_name_namespace = 1;
+    records.push_back(r5);
+
+    RecordInfo r6;
+    r6.record_index = 105;
+    r6.name = L"aux";
+    r6.full_path = L"D:\\aux";
+    r6.file_name_namespace = 1;
+    records.push_back(r6);
+
+    RecordInfo r7;
+    r7.record_index = 106;
+    r7.name = L"bad<tag>.html";
+    r7.full_path = L"D:\\bad<tag>.html";
+    r7.file_name_namespace = 0;
+    records.push_back(r7);
+
+    RecordInfo r8;
+    r8.record_index = 107;
+    r8.is_directory = true;
+    r8.name = L"dir_dot.";
+    r8.full_path = L"D:\\dir_dot.";
+    r8.file_name_namespace = 1;
+    records.push_back(r8);
+
+    auto report = NamespaceAuditor::analyze(records);
+    check(report.total_files_analyzed == 8, "total_files_analyzed == 8");
+    check(report.total_anomalies >= 7, "total_anomalies >= 7");
+    check(report.posix_files_count >= 1, "posix_files_count >= 1");
+    check(report.trailing_dot_count >= 2, "trailing_dot_count >= 2");
+    check(report.trailing_space_count >= 1, "trailing_space_count >= 1");
+    check(report.dos_device_name_count >= 2, "dos_device_name_count >= 2");
+    check(report.illegal_chars_count >= 1, "illegal_chars_count >= 1");
+    check(NamespaceAuditor::is_dos_device_name(L"NUL"), "is_dos_device_name NUL");
+    check(NamespaceAuditor::is_dos_device_name(L"COM1.log"), "is_dos_device_name COM1.log");
+    check(!NamespaceAuditor::is_dos_device_name(L"CONFIG.sys"), "is_dos_device_name not CONFIG.sys");
+    check(NamespaceAuditor::has_illegal_win32_chars(L"file*name"), "has_illegal_win32_chars *");
+    check(NamespaceAuditor::has_illegal_win32_chars(L"test:stream"), "has_illegal_win32_chars :");
+    check(!NamespaceAuditor::has_illegal_win32_chars(L"normal_name-123.txt"), "has_illegal_win32_chars clean");
+}
+
+void test_inlining_advisor() {
+    std::vector<RecordInfo> records;
+
+    RecordInfo r1;
+    r1.record_index = 200;
+    r1.name = L"tiny_resident.txt";
+    r1.size_bytes = 120;
+    r1.allocated_bytes = 0;
+    r1.is_resident = true;
+    records.push_back(r1);
+
+    RecordInfo r2;
+    r2.record_index = 201;
+    r2.name = L"wasted_small.json";
+    r2.size_bytes = 300;
+    r2.allocated_bytes = 4096;
+    r2.is_resident = false;
+    records.push_back(r2);
+
+    RecordInfo r3;
+    r3.record_index = 202;
+    r3.name = L"tiny_config.ini";
+    r3.size_bytes = 50;
+    r3.allocated_bytes = 4096;
+    r3.is_resident = false;
+    records.push_back(r3);
+
+    RecordInfo r4;
+    r4.record_index = 203;
+    r4.name = L"large_file.dat";
+    r4.size_bytes = 10000;
+    r4.allocated_bytes = 12288;
+    r4.is_resident = false;
+    records.push_back(r4);
+
+    RecordInfo r5;
+    r5.record_index = 204;
+    r5.is_directory = true;
+    r5.name = L"my_folder";
+    r5.size_bytes = 4096;
+    r5.allocated_bytes = 4096;
+    records.push_back(r5);
+
+    RecordInfo r6;
+    r6.record_index = 205;
+    r6.is_deleted = true;
+    r6.name = L"deleted.tmp";
+    r6.size_bytes = 200;
+    r6.allocated_bytes = 4096;
+    records.push_back(r6);
+
+    uint32_t cluster_size = 4096;
+    auto rep = InliningAdvisor::analyze(records, cluster_size, 10);
+    check(rep.total_files_analyzed == 4, "total_files_analyzed == 4");
+    check(rep.already_resident_count == 1, "already_resident_count == 1");
+    check(rep.already_resident_payload_bytes == 120, "already_resident_payload_bytes == 120");
+    check(rep.inlining_candidates_count == 2, "inlining_candidates_count == 2");
+    check(rep.reclaimable_bytes == 8192, "reclaimable_bytes == 8192");
+    check(rep.candidates.size() == 2, "candidates size == 2");
+    check(rep.potential_resident_ratio > rep.current_resident_ratio, "potential_resident_ratio > current_resident_ratio");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -1769,6 +1912,12 @@ int main() {
     std::wcout << L"[RUN] test_extend_analyzer\n";
     test_extend_analyzer();
 
-    std::wcout << L"All 44 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_namespace_auditor\n";
+    test_namespace_auditor();
+
+    std::wcout << L"[RUN] test_inlining_advisor\n";
+    test_inlining_advisor();
+
+    std::wcout << L"All 46 unit test suites passed successfully.\n";
     return 0;
 }

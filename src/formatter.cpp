@@ -692,6 +692,14 @@ void Formatter::print_extend_report(const ExtendReport& report) {
     ExtendAnalyzer::print_report(report);
 }
 
+void Formatter::print_namespace_report(const NamespaceReport& report) {
+    NamespaceAuditor::print_report(report);
+}
+
+void Formatter::print_inlining_report(const InliningReport& report) {
+    InliningAdvisor::print_report(report);
+}
+
 
 
 static std::string escape_json_string(const std::wstring& ws) {

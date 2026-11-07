@@ -138,6 +138,9 @@ std::optional<RecordInfo> RecordParser::parse_record(
                     }
 
                     std::wstring current_fn(name_ptr, name_chars);
+                    if (fn_hdr->file_name_namespace == 0) {
+                        info.has_posix_namespace = true;
+                    }
                     if (fn_hdr->file_name_namespace != 2) {
                         info.sibling_names.push_back(current_fn);
                     }
@@ -145,6 +148,7 @@ std::optional<RecordInfo> RecordParser::parse_record(
                     if (priority > best_namespace_priority || info.name.empty()) {
                         best_namespace_priority = priority;
                         info.name = std::move(current_fn);
+                        info.file_name_namespace = fn_hdr->file_name_namespace;
                         info.parent_record_index = extract_record_number(fn_hdr->parent_directory_ref);
                         info.fn_creation_time = fn_hdr->creation_time;
                         info.fn_modification_time = fn_hdr->modification_time;
