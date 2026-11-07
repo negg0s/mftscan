@@ -195,6 +195,79 @@ void Formatter::print_usn_change(const UsnChangeRecord& change) {
                << L" " << change.file_name << L" (USN: " << change.usn << L")\n";
 }
 
+void Formatter::print_fragmentation_table(const FragmentationReport& report) {
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+    std::wcout << L" File Fragmentation Report | Fragmented Files: " << report.total_fragmented_files
+               << L" | Excess Fragments: " << report.total_excess_fragments
+               << L" | Max Fragments: " << report.highest_fragment_count << L"\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+
+    if (report.most_fragmented_files.empty()) {
+        std::wcout << L"No fragmented files found matching criteria.\n\n";
+        return;
+    }
+
+    std::wcout << std::left
+               << std::setw(12) << L"Fragments"
+               << std::setw(14) << L"Size"
+               << std::setw(16) << L"Allocated"
+               << L"Path\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+
+    for (const auto& r : report.most_fragmented_files) {
+        std::wcout << std::left
+                   << std::setw(12) << r.fragment_count
+                   << std::setw(14) << format_bytes(r.size_bytes)
+                   << std::setw(16) << format_bytes(r.allocated_bytes)
+                   << r.full_path << L"\n";
+    }
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
+}
+
+void Formatter::print_slack_table(const SlackSpaceReport& report) {
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+    std::wcout << L" Cluster Slack Space Report | Files with Slack: " << report.total_files_with_slack
+               << L" | Wasted Slack Space: " << format_bytes(report.total_slack_bytes) << L"\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+
+    if (report.top_slack_files.empty()) {
+        std::wcout << L"No cluster slack space found.\n\n";
+        return;
+    }
+
+    std::wcout << std::left
+               << std::setw(14) << L"Slack Wasted"
+               << std::setw(14) << L"Logical Size"
+               << std::setw(16) << L"Allocated"
+               << L"Path\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+
+    for (const auto& r : report.top_slack_files) {
+        std::wcout << std::left
+                   << std::setw(14) << format_bytes(r.slack_bytes)
+                   << std::setw(14) << format_bytes(r.size_bytes)
+                   << std::setw(16) << format_bytes(r.allocated_bytes)
+                   << r.full_path << L"\n";
+    }
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
+}
+
+void Formatter::print_compression_table(const CompressionReport& report) {
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+    std::wcout << L" NTFS Compression & Sparse Allocation Report\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+    std::wcout << L"  Compressed Files      : " << report.compressed_file_count << L"\n";
+    std::wcout << L"  Compressed Logical    : " << format_bytes(report.compressed_logical_bytes) << L"\n";
+    std::wcout << L"  Compressed Physical   : " << format_bytes(report.compressed_allocated_bytes) << L"\n";
+    std::wcout << L"  Compressed Savings    : " << format_bytes(report.compressed_saved_bytes) << L"\n\n";
+
+    std::wcout << L"  Sparse Files          : " << report.sparse_file_count << L"\n";
+    std::wcout << L"  Sparse Logical        : " << format_bytes(report.sparse_logical_bytes) << L"\n";
+    std::wcout << L"  Sparse Physical       : " << format_bytes(report.sparse_allocated_bytes) << L"\n";
+    std::wcout << L"  Sparse Savings        : " << format_bytes(report.sparse_saved_bytes) << L"\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
+}
+
 static std::string escape_json_string(const std::wstring& ws) {
     std::ostringstream oss;
     for (wchar_t wc : ws) {

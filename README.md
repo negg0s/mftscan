@@ -12,6 +12,9 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **Path Tree Reconstruction**: Resolves full directory paths using parent file reference numbers (FRNs) with cached tree lookup and cycle prevention.
 - **Attribute Decoding**: Parses `$STANDARD_INFORMATION` (timestamps, DOS attributes), `$FILE_NAME` (POSIX/Win32/DOS namespaces), and `$DATA` (resident and non-resident stream lengths).
 - **Duplicate File Detection**: Groups files by exact size and computes partial and full FNV-1a hashes to identify duplicate files and calculate reclaimable space (`--dup`).
+- **File Fragmentation Analysis**: Decodes non-resident `$DATA` extents to calculate fragment counts and identify the most fragmented files on the volume (`--defrag`).
+- **Cluster Slack Space Analysis**: Measures wasted bytes in the final cluster of non-resident files and pinpoints the largest slack wasters (`--slack`).
+- **Compression & Sparse Space Savings**: Computes physical disk space saved via native NTFS file compression and sparse allocation (`--compression`).
 - **Real-Time Change Monitor**: Reads live filesystem operations via `FSCTL_READ_USN_JOURNAL` (`--watch`), showing creations, deletions, renames, and writes as they happen.
 - **Interactive Fullscreen TUI**: Terminal UI (`-i`, `--tui`) featuring real-time filter-as-you-type search and instant column sorting (F1-F4) using pure Win32 Virtual Terminal escape sequences.
 - **Alternate Data Stream (ADS) Discovery**: Detects secondary named `$DATA` streams attached to files.

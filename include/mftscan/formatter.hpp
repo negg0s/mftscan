@@ -11,6 +11,8 @@
 #include "mftscan/common.hpp"
 #include "mftscan/disk_usage.hpp"
 #include "mftscan/duplicate_detector.hpp"
+#include "mftscan/fragmentation_analyzer.hpp"
+#include "mftscan/sparse_slack_analyzer.hpp"
 #include "mftscan/usn_monitor.hpp"
 
 #include <string>
@@ -31,6 +33,9 @@ public:
     static void print_extension_histogram_table(const std::vector<ExtensionStat>& stats);
     static void print_duplicates_table(const DuplicateReport& report);
     static void print_usn_change(const UsnChangeRecord& change);
+    static void print_fragmentation_table(const FragmentationReport& report);
+    static void print_slack_table(const SlackSpaceReport& report);
+    static void print_compression_table(const CompressionReport& report);
 
     static std::string to_json(
         const std::vector<RecordInfo>& records,

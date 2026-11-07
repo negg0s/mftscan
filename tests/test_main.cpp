@@ -3,11 +3,14 @@
 #include "mftscan/disk_usage.hpp"
 #include "mftscan/duplicate_detector.hpp"
 #include "mftscan/formatter.hpp"
+#include "mftscan/fragmentation_analyzer.hpp"
 #include "mftscan/ntfs_defs.hpp"
 #include "mftscan/path_builder.hpp"
 #include "mftscan/privileges.hpp"
 #include "mftscan/query.hpp"
 #include "mftscan/record_parser.hpp"
+#include "mftscan/sparse_slack_analyzer.hpp"
+#include "mftscan/thread_pool.hpp"
 #include "mftscan/usn_monitor.hpp"
 
 #include <cassert>
@@ -394,6 +397,70 @@ static void test_usn_reason_formatting() {
     check(s3 == L"NONE", "format_reason zero is NONE");
 }
 
+static void test_fragmentation_analyzer() {
+    std::vector<RecordInfo> records;
+
+    RecordInfo r1; r1.name = L"contiguous.dat"; r1.size_bytes = 100000; r1.fragment_count = 0; records.push_back(r1);
+    RecordInfo r2; r2.name = L"frag_mild.dat"; r2.size_bytes = 500000; r2.fragment_count = 5; records.push_back(r2);
+    RecordInfo r3; r3.name = L"frag_heavy.dat"; r3.size_bytes = 2000000; r3.fragment_count = 42; records.push_back(r3);
+
+    auto rep = FragmentationAnalyzer::analyze(records, 1);
+    check(rep.total_fragmented_files == 2, "2 fragmented files detected");
+    check(rep.total_excess_fragments == 47, "47 excess fragments total");
+    check(rep.highest_fragment_count == 42, "highest fragment count is 42");
+    check(rep.most_fragmented_files.size() == 2, "most fragmented size 2");
+    check(rep.most_fragmented_files[0].name == L"frag_heavy.dat", "heaviest fragmented file first");
+}
+
+static void test_sparse_and_slack_analyzer() {
+    std::vector<RecordInfo> records;
+
+    RecordInfo r1;
+    r1.name = L"slack_file.dat";
+    r1.size_bytes = 1000;
+    r1.allocated_bytes = 4096;
+    r1.slack_bytes = 3096;
+    records.push_back(r1);
+
+    RecordInfo r2;
+    r2.name = L"sparse_vm.vhdx";
+    r2.size_bytes = 50000000000ULL;
+    r2.allocated_bytes = 5000000000ULL;
+    r2.is_sparse = true;
+    records.push_back(r2);
+
+    RecordInfo r3;
+    r3.name = L"compressed_log.txt";
+    r3.size_bytes = 10000000;
+    r3.allocated_bytes = 2000000;
+    r3.is_compressed = true;
+    records.push_back(r3);
+
+    auto slack_rep = SparseSlackAnalyzer::analyze_slack(records);
+    check(slack_rep.total_files_with_slack == 1, "1 file with slack");
+    check(slack_rep.total_slack_bytes == 3096, "3096 bytes slack wasted");
+
+    auto comp_rep = SparseSlackAnalyzer::analyze_compression(records);
+    check(comp_rep.sparse_file_count == 1, "1 sparse file");
+    check(comp_rep.sparse_saved_bytes == 45000000000ULL, "45 GB sparse savings");
+    check(comp_rep.compressed_file_count == 1, "1 compressed file");
+    check(comp_rep.compressed_saved_bytes == 8000000, "8 MB compression savings");
+}
+
+static void test_thread_pool() {
+    ThreadPool pool(4);
+    std::atomic<int> counter{0};
+
+    for (int i = 0; i < 50; ++i) {
+        pool.enqueue([&counter]() {
+            counter.fetch_add(1, std::memory_order_relaxed);
+        });
+    }
+
+    pool.wait_idle();
+    check(counter.load() == 50, "thread pool processed all 50 tasks concurrently");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -440,6 +507,15 @@ int main() {
     std::wcout << L"[RUN] test_usn_reason_formatting\n";
     test_usn_reason_formatting();
 
-    std::wcout << L"All 15 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_fragmentation_analyzer\n";
+    test_fragmentation_analyzer();
+
+    std::wcout << L"[RUN] test_sparse_and_slack_analyzer\n";
+    test_sparse_and_slack_analyzer();
+
+    std::wcout << L"[RUN] test_thread_pool\n";
+    test_thread_pool();
+
+    std::wcout << L"All 18 unit test suites passed successfully.\n";
     return 0;
 }

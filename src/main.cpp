@@ -2,8 +2,10 @@
 #include "mftscan/disk_usage.hpp"
 #include "mftscan/duplicate_detector.hpp"
 #include "mftscan/formatter.hpp"
+#include "mftscan/fragmentation_analyzer.hpp"
 #include "mftscan/privileges.hpp"
 #include "mftscan/scanner.hpp"
+#include "mftscan/sparse_slack_analyzer.hpp"
 #include "mftscan/tui.hpp"
 #include "mftscan/usn_monitor.hpp"
 
@@ -49,10 +51,15 @@ static void print_help() {
     std::wcout << L"  --files                  Filter files only\n";
     std::wcout << L"  --dirs                   Filter directories only\n";
     std::wcout << L"  --deleted                Scan for deleted / unallocated MFT file records\n";
-    std::wcout << L"  --ads                    Search Alternate Data Streams (:stream)\n\n";
+    std::wcout << L"  --ads                    Search Alternate Data Streams (:stream)\n";
+    std::wcout << L"  --sparse                 Filter sparse files only\n";
+    std::wcout << L"  --compressed             Filter NTFS-compressed files only\n\n";
     std::wcout << L"Analysis & Views:\n";
     std::wcout << L"  -i, --tui                Interactive fullscreen Terminal UI with live filtering\n";
     std::wcout << L"  --dup [min_size]         Scan for duplicate files by size and hash (default: 4KB)\n";
+    std::wcout << L"  --defrag [min_frags]     Analyze file fragmentation on volume (default: 1)\n";
+    std::wcout << L"  --slack                  Analyze cluster slack space and waste\n";
+    std::wcout << L"  --compression            Report NTFS compression and sparse space savings\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -83,6 +90,10 @@ int wmain(int argc, wchar_t* argv[]) {
     bool mode_tui = false;
     bool mode_dup = false;
     uint64_t dup_min_size = 4096;
+    bool mode_defrag = false;
+    uint32_t defrag_min_frags = 1;
+    bool mode_slack = false;
+    bool mode_compression = false;
     bool mode_watch = false;
     bool mode_top = false;
     size_t top_limit = 20;
@@ -117,6 +128,19 @@ int wmain(int argc, wchar_t* argv[]) {
             if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
                 dup_min_size = parse_size_string(argv[++i]);
             }
+        } else if (arg == L"--defrag" || arg == L"--fragmented") {
+            mode_defrag = true;
+            if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
+                defrag_min_frags = static_cast<uint32_t>(_wtoi(argv[++i]));
+            }
+        } else if (arg == L"--slack") {
+            mode_slack = true;
+        } else if (arg == L"--compression") {
+            mode_compression = true;
+        } else if (arg == L"--sparse") {
+            filter.only_sparse = true;
+        } else if (arg == L"--compressed") {
+            filter.only_compressed = true;
         } else if (arg == L"--watch") {
             mode_watch = true;
         } else if (arg == L"-s" || arg == L"--search") {
@@ -258,6 +282,15 @@ int wmain(int argc, wchar_t* argv[]) {
     if (mode_dup) {
         auto dup_report = DuplicateDetector::find_duplicates(records, dup_min_size);
         Formatter::print_duplicates_table(dup_report);
+    } else if (mode_defrag) {
+        auto frag_report = FragmentationAnalyzer::analyze(records, defrag_min_frags);
+        Formatter::print_fragmentation_table(frag_report);
+    } else if (mode_slack) {
+        auto slack_report = SparseSlackAnalyzer::analyze_slack(records);
+        Formatter::print_slack_table(slack_report);
+    } else if (mode_compression) {
+        auto comp_report = SparseSlackAnalyzer::analyze_compression(records);
+        Formatter::print_compression_table(comp_report);
     } else if (mode_top) {
         auto top_files = DiskUsageAnalyzer::top_largest_files(records, top_limit);
         Formatter::print_top_files_table(top_files);

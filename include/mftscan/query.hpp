@@ -30,6 +30,10 @@ struct QueryFilter {
     bool include_deleted{false};
     bool only_deleted{false};
     bool only_ads{false};
+    bool only_sparse{false};
+    bool only_compressed{false};
+    std::optional<uint32_t> min_fragments;
+    std::optional<uint64_t> min_slack;
 };
 
 class QueryEngine {

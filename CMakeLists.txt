@@ -52,6 +52,7 @@ add_library(mftscan_core STATIC
     include/mftscan/disk_usage.hpp
     include/mftscan/duplicate_detector.hpp
     include/mftscan/formatter.hpp
+    include/mftscan/fragmentation_analyzer.hpp
     include/mftscan/ntfs_defs.hpp
     include/mftscan/path_builder.hpp
     include/mftscan/privileges.hpp
@@ -59,6 +60,8 @@ add_library(mftscan_core STATIC
     include/mftscan/raw_streamer.hpp
     include/mftscan/record_parser.hpp
     include/mftscan/scanner.hpp
+    include/mftscan/sparse_slack_analyzer.hpp
+    include/mftscan/thread_pool.hpp
     include/mftscan/tui.hpp
     include/mftscan/usn_monitor.hpp
     include/mftscan/volume.hpp
@@ -66,12 +69,15 @@ add_library(mftscan_core STATIC
     src/disk_usage.cpp
     src/duplicate_detector.cpp
     src/formatter.cpp
+    src/fragmentation_analyzer.cpp
     src/path_builder.cpp
     src/privileges.cpp
     src/query.cpp
     src/raw_streamer.cpp
     src/record_parser.cpp
     src/scanner.cpp
+    src/sparse_slack_analyzer.cpp
+    src/thread_pool.cpp
     src/tui.cpp
     src/usn_monitor.cpp
     src/volume.cpp

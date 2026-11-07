@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-11-07
+
+### Added
+- NTFS file fragmentation analyzer (`FragmentationAnalyzer`): decodes `$DATA` extents across non-resident files to calculate exact fragmentation metrics (`--defrag`), identifying the most fragmented files on the volume without calling defragmentation APIs.
+- Cluster slack space analyzer (`SparseSlackAnalyzer`): calculates wasted slack bytes in final allocated clusters across all non-resident files (`--slack`) and ranks the largest slack space wasters.
+- NTFS compression and sparse allocation savings analyzer (`SparseSlackAnalyzer`): calculates exact physical disk space saved via native NTFS compression (`--compressed`) and sparse files (`--sparse`), comparing logical byte lengths with allocated physical clusters (`--compression`).
+- Standalone standard C++20 worker thread pool (`ThreadPool`): provides concurrent task execution with `std::jthread` and work-stealing queues for parallel MFT batch processing.
+
 ## [0.2.0] - 2026-11-07
 
 ### Added

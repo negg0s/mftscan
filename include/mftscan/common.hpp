@@ -30,6 +30,10 @@ struct RecordInfo {
     bool is_directory{false};
     bool is_deleted{false};
     bool has_ads{false};
+    bool is_sparse{false};
+    bool is_compressed{false};
+    uint32_t fragment_count{0};
+    uint64_t slack_bytes{0};
     std::vector<std::wstring> ads_names;
 };
 

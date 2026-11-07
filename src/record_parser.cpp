@@ -1,4 +1,5 @@
 #include "mftscan/record_parser.hpp"
+#include "mftscan/data_run.hpp"
 
 #include <cstring>
 #include <vector>
@@ -156,13 +157,31 @@ std::optional<RecordInfo> RecordParser::parse_record(
                     info.ads_names.emplace_back(ads_name_ptr, name_chars);
                 }
             } else {
-                // Primary unnamed data stream: extract exact size
+                // Primary unnamed data stream: extract exact size, compression, and fragmentation
+                info.is_compressed = (attr->flags & 0x0001) != 0 || (info.attributes & FILE_ATTRIBUTE_COMPRESSED) != 0;
+                info.is_sparse = (attr->flags & 0x8000) != 0 || (info.attributes & FILE_ATTRIBUTE_SPARSE_FILE) != 0;
+
                 if (attr->non_resident_flag == 0) {
                     info.size_bytes = attr->resident.value_length;
-                    info.allocated_bytes = (info.size_bytes + 511) & ~511ULL;
+                    info.allocated_bytes = 0; // Resident within MFT record
+                    info.slack_bytes = 0;
+                    info.fragment_count = 0;
                 } else {
                     info.size_bytes = attr->non_resident.real_size;
                     info.allocated_bytes = attr->non_resident.allocated_size;
+                    if (info.allocated_bytes > info.size_bytes) {
+                        info.slack_bytes = info.allocated_bytes - info.size_bytes;
+                    }
+
+                    const uint32_t runs_offset = attr->non_resident.data_runs_offset;
+                    if (runs_offset < attr->record_length) {
+                        const uint8_t* run_ptr = record.data() + offset + runs_offset;
+                        const size_t max_run_len = attr->record_length - runs_offset;
+                        auto extents = DataRunDecoder::decode_mapping_pairs(run_ptr, max_run_len);
+                        if (extents.size() > 1) {
+                            info.fragment_count = static_cast<uint32_t>(extents.size() - 1);
+                        }
+                    }
                 }
             }
         }

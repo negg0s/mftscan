@@ -93,6 +93,22 @@ bool QueryEngine::matches(const RecordInfo& record) const {
         return false;
     }
 
+    // 4. Sparse and Compressed filters
+    if (filter_.only_sparse && !record.is_sparse) {
+        return false;
+    }
+    if (filter_.only_compressed && !record.is_compressed) {
+        return false;
+    }
+
+    // 5. Fragmentation and Slack filters
+    if (filter_.min_fragments && record.fragment_count < *filter_.min_fragments) {
+        return false;
+    }
+    if (filter_.min_slack && record.slack_bytes < *filter_.min_slack) {
+        return false;
+    }
+
     // 4. Size filter (only applies to files)
     if (!record.is_directory) {
         if (filter_.min_size && record.size_bytes < *filter_.min_size) {
