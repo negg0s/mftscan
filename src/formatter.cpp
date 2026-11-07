@@ -306,6 +306,43 @@ void Formatter::print_timestomp_table(const TimestompReport& report) {
     std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
 }
 
+void Formatter::print_signature_report(const SignatureReport& report) {
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+    std::wcout << L" File Signature & Extension Spoofing Report\n";
+    std::wcout << L" Total Files Inspected: " << report.total_inspected
+               << L" | Mismatches: " << report.mismatches_detected
+               << L" | Masquerading Executables: " << report.critical_executables_detected << L"\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+
+    if (report.entries.empty()) {
+        std::wcout << L"No extension mismatches or spoofed signatures detected.\n\n";
+        return;
+    }
+
+    std::wcout << std::left
+               << std::setw(10) << L"FRN"
+               << std::setw(10) << L"Ext"
+               << std::setw(26) << L"Detected Signature"
+               << std::setw(14) << L"Size"
+               << std::setw(14) << L"Risk"
+               << L"Path\n";
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n";
+
+    for (const auto& e : report.entries) {
+        std::wstring risk_str = e.is_executable_masquerading ? L"[CRITICAL PE]" : L"[MISMATCH]";
+        std::wstring disp_path = e.full_path.empty() ? e.name : e.full_path;
+
+        std::wcout << std::left
+                   << std::setw(10) << e.record_index
+                   << std::setw(10) << e.declared_extension
+                   << std::setw(26) << e.detected_type_name
+                   << std::setw(14) << format_bytes(e.size_bytes)
+                   << std::setw(14) << risk_str
+                   << disp_path << L"\n";
+    }
+    std::wcout << L"--------------------------------------------------------------------------------------------------------------------\n\n";
+}
+
 static std::string escape_json_string(const std::wstring& ws) {
     std::ostringstream oss;
     for (wchar_t wc : ws) {

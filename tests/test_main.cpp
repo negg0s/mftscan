@@ -10,6 +10,7 @@
 #include "mftscan/privileges.hpp"
 #include "mftscan/query.hpp"
 #include "mftscan/record_parser.hpp"
+#include "mftscan/signature_verifier.hpp"
 #include "mftscan/sparse_slack_analyzer.hpp"
 #include "mftscan/thread_pool.hpp"
 #include "mftscan/timestomp.hpp"
@@ -568,6 +569,56 @@ static void test_timestomp_detection() {
     check(found_ancient, "Pre1980Timestamp identified");
 }
 
+static void test_signature_verifier() {
+    const uint8_t mz_hdr[] = {0x4D, 0x5A, 0x90, 0x00};
+    check(SignatureVerifier::identify_type(mz_hdr, sizeof(mz_hdr)) == KnownFileType::PeExecutable, "identify PE executable");
+
+    const uint8_t pdf_hdr[] = {0x25, 0x50, 0x44, 0x46, 0x2D};
+    check(SignatureVerifier::identify_type(pdf_hdr, sizeof(pdf_hdr)) == KnownFileType::PdfDocument, "identify PDF document");
+
+    const uint8_t zip_hdr[] = {0x50, 0x4B, 0x03, 0x04};
+    check(SignatureVerifier::identify_type(zip_hdr, sizeof(zip_hdr)) == KnownFileType::ZipArchive, "identify ZIP archive");
+
+    const uint8_t png_hdr[] = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+    check(SignatureVerifier::identify_type(png_hdr, sizeof(png_hdr)) == KnownFileType::PngImage, "identify PNG image");
+
+    const uint8_t jpg_hdr[] = {0xFF, 0xD8, 0xFF, 0xE0};
+    check(SignatureVerifier::identify_type(jpg_hdr, sizeof(jpg_hdr)) == KnownFileType::JpegImage, "identify JPEG image");
+
+    const uint8_t random_hdr[] = {0x12, 0x34, 0x56, 0x78};
+    check(SignatureVerifier::identify_type(random_hdr, sizeof(random_hdr)) == KnownFileType::Unknown, "identify unknown type");
+
+    check(SignatureVerifier::is_extension_compatible(KnownFileType::PeExecutable, L"exe"), "exe compatible with PE");
+    check(SignatureVerifier::is_extension_compatible(KnownFileType::PeExecutable, L"dll"), "dll compatible with PE");
+    check(!SignatureVerifier::is_extension_compatible(KnownFileType::PeExecutable, L"jpg"), "jpg incompatible with PE (spoof)");
+    check(!SignatureVerifier::is_extension_compatible(KnownFileType::PeExecutable, L"pdf"), "pdf incompatible with PE (spoof)");
+    check(SignatureVerifier::is_extension_compatible(KnownFileType::ZipArchive, L"docx"), "docx compatible with ZIP");
+
+    std::vector<RecordInfo> records;
+
+    RecordInfo fake_img;
+    fake_img.record_index = 100;
+    fake_img.name = L"invoice.pdf";
+    fake_img.size_bytes = 512;
+    fake_img.is_resident = true;
+    fake_img.resident_magic = {0x4D, 0x5A, 0x90, 0x00}; // Actually an executable!
+    records.push_back(fake_img);
+
+    RecordInfo real_img;
+    real_img.record_index = 200;
+    real_img.name = L"photo.jpg";
+    real_img.size_bytes = 512;
+    real_img.is_resident = true;
+    real_img.resident_magic = {0xFF, 0xD8, 0xFF, 0xE0}; // Genuine JPEG
+    records.push_back(real_img);
+
+    auto rep = SignatureVerifier::analyze(records);
+    check(rep.total_inspected == 2, "signature verifier inspected 2 resident files");
+    check(rep.mismatches_detected == 1, "signature verifier detected 1 mismatch");
+    check(rep.critical_executables_detected == 1, "detected 1 masquerading PE executable");
+    check(rep.entries[0].record_index == 100, "flagged invoice.pdf as masquerading executable");
+}
+
 int main() {
     std::wcout << L"[RUN] test_privileges_check\n";
     test_privileges_check();
@@ -632,6 +683,9 @@ int main() {
     std::wcout << L"[RUN] test_timestomp_detection\n";
     test_timestomp_detection();
 
-    std::wcout << L"All 21 unit test suites passed successfully.\n";
+    std::wcout << L"[RUN] test_signature_verifier\n";
+    test_signature_verifier();
+
+    std::wcout << L"All 22 unit test suites passed successfully.\n";
     return 0;
 }

@@ -36,6 +36,8 @@ struct RecordInfo {
     bool is_compressed{false};
     uint32_t fragment_count{0};
     uint64_t slack_bytes{0};
+    bool is_resident{false};
+    std::vector<uint8_t> resident_magic;
     std::vector<std::wstring> ads_names;
 };
 

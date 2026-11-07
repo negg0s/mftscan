@@ -12,6 +12,7 @@
 #include "mftscan/disk_usage.hpp"
 #include "mftscan/duplicate_detector.hpp"
 #include "mftscan/fragmentation_analyzer.hpp"
+#include "mftscan/signature_verifier.hpp"
 #include "mftscan/sparse_slack_analyzer.hpp"
 #include "mftscan/timestomp.hpp"
 #include "mftscan/usn_monitor.hpp"
@@ -38,6 +39,7 @@ public:
     static void print_slack_table(const SlackSpaceReport& report);
     static void print_compression_table(const CompressionReport& report);
     static void print_timestomp_table(const TimestompReport& report);
+    static void print_signature_report(const SignatureReport& report);
 
     static std::string to_json(
         const std::vector<RecordInfo>& records,

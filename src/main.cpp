@@ -3,9 +3,11 @@
 #include "mftscan/duplicate_detector.hpp"
 #include "mftscan/formatter.hpp"
 #include "mftscan/fragmentation_analyzer.hpp"
+#include "mftscan/index_parser.hpp"
 #include "mftscan/inspector.hpp"
 #include "mftscan/privileges.hpp"
 #include "mftscan/scanner.hpp"
+#include "mftscan/signature_verifier.hpp"
 #include "mftscan/sparse_slack_analyzer.hpp"
 #include "mftscan/timestomp.hpp"
 #include "mftscan/tui.hpp"
@@ -59,11 +61,13 @@ static void print_help() {
     std::wcout << L"Analysis & Views:\n";
     std::wcout << L"  -i, --tui                Interactive fullscreen Terminal UI with live filtering\n";
     std::wcout << L"  --inspect <FRN>          Low-level MFT record inspector and attribute hex dump\n";
+    std::wcout << L"  --ls <dir_FRN>           List directory index contents and carved slack from $INDEX_ROOT\n";
     std::wcout << L"  --dup [min_size]         Scan for duplicate files by size and hash (default: 4KB)\n";
     std::wcout << L"  --defrag [min_frags]     Analyze file fragmentation on volume (default: 1)\n";
     std::wcout << L"  --slack                  Analyze cluster slack space and waste\n";
     std::wcout << L"  --compression            Report NTFS compression and sparse space savings\n";
     std::wcout << L"  --timestomp              Detect timestamp anomalies and timestomping signatures\n";
+    std::wcout << L"  --type-mismatch          Detect file extension spoofing and masquerading executables\n";
     std::wcout << L"  --watch                  Live monitor real-time volume changes via USN Journal\n";
     std::wcout << L"  --top [N]                List top N largest files (default: 20)\n";
     std::wcout << L"  --du [N]                 Analyze top directory disk consumption (default: 20)\n";
@@ -94,6 +98,8 @@ int wmain(int argc, wchar_t* argv[]) {
     bool mode_tui = false;
     bool mode_inspect = false;
     uint64_t inspect_frn = 0;
+    bool mode_ls = false;
+    uint64_t ls_dir_frn = 5;
     bool mode_dup = false;
     uint64_t dup_min_size = 4096;
     bool mode_defrag = false;
@@ -101,6 +107,7 @@ int wmain(int argc, wchar_t* argv[]) {
     bool mode_slack = false;
     bool mode_compression = false;
     bool mode_timestomp = false;
+    bool mode_signature = false;
     bool mode_watch = false;
     bool mode_top = false;
     size_t top_limit = 20;
@@ -135,6 +142,13 @@ int wmain(int argc, wchar_t* argv[]) {
             if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
                 inspect_frn = static_cast<uint64_t>(_wtoi64(argv[++i]));
             }
+        } else if (arg == L"--ls" || arg == L"--dir-index") {
+            mode_ls = true;
+            if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
+                ls_dir_frn = static_cast<uint64_t>(_wtoi64(argv[++i]));
+            }
+        } else if (arg == L"--type-mismatch" || arg == L"--audit-ext") {
+            mode_signature = true;
         } else if (arg == L"--dup") {
             mode_dup = true;
             if (i + 1 < argc && iswdigit(argv[i + 1][0])) {
@@ -229,6 +243,26 @@ int wmain(int argc, wchar_t* argv[]) {
         }
 
         RecordInspector::print_report(insp_res.value());
+        return 0;
+    }
+
+    // Directory index mode: Direct B-Tree $INDEX_ROOT listing and slack carving
+    if (mode_ls) {
+        Formatter::print_banner();
+        VolumeReader vr(drive_letter);
+        auto open_res = vr.open();
+        if (!open_res) {
+            std::wcerr << L"Failed to open volume " << drive_letter << L": " << open_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        auto idx_res = IndexParser::parse_directory_index(vr, ls_dir_frn);
+        if (!idx_res) {
+            std::wcerr << L"Failed to parse directory index for FRN " << ls_dir_frn << L": " << idx_res.error().to_string() << L"\n";
+            return 1;
+        }
+
+        IndexParser::print_index_report(idx_res.value());
         return 0;
     }
 
@@ -328,6 +362,9 @@ int wmain(int argc, wchar_t* argv[]) {
     } else if (mode_timestomp) {
         auto ts_report = TimestompDetector::analyze(records);
         Formatter::print_timestomp_table(ts_report);
+    } else if (mode_signature) {
+        auto sig_report = SignatureVerifier::analyze(records);
+        Formatter::print_signature_report(sig_report);
     } else if (mode_top) {
         auto top_files = DiskUsageAnalyzer::top_largest_files(records, top_limit);
         Formatter::print_top_files_table(top_files);

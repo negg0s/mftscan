@@ -16,6 +16,8 @@ Written in modern C++20 and pure Win32 API. Zero external dependencies, static C
 - **Cluster Slack Space Analysis**: Measures wasted bytes in the final cluster of non-resident files and pinpoints the largest slack wasters (`--slack`).
 - **Compression & Sparse Space Savings**: Computes physical disk space saved via native NTFS file compression and sparse allocation (`--compression`).
 - **Anti-Forensics & Timestomping Detection**: Cross-examines `$STANDARD_INFORMATION` and `$FILE_NAME` timestamps to detect tampering, such as SI modification before FN creation, inverted creation dates, and zeroed nanosecond fractional seconds (`--timestomp`).
+- **File Signature & Masquerading Detection**: Inspects magic byte signatures (`MZ`, `%PDF`, `PK`, `7z`, `Rar!`, `PNG`, `JPEG`, etc.) to discover file extension spoofing and flag executables masquerading as documents or media (`--type-mismatch`).
+- **Directory Index B-Tree Walker & Slack Carver**: Decodes `$INDEX_ROOT` and `$INDEX_ALLOCATION` nodes to list directory contents directly from internal B-Trees (`--ls <dir_FRN>`) and carves residual deleted index entries from index slack space.
 - **Low-Level Record Inspector**: Decodes raw resident and non-resident attributes, tests fixup integrity, and outputs formatted 16-byte aligned hexadecimal and ASCII previews (`--inspect <FRN>`).
 - **Real-Time Change Monitor**: Reads live filesystem operations via `FSCTL_READ_USN_JOURNAL` (`--watch`), showing creations, deletions, renames, and writes as they happen.
 - **Interactive Fullscreen TUI**: Terminal UI (`-i`, `--tui`) featuring real-time filter-as-you-type search, instant column sorting (F1-F4), and a detailed record metadata modal on pressing `Enter`.
@@ -75,6 +77,8 @@ Analysis & Views:
   --slack                  Analyze cluster slack space and waste
   --compression            Report NTFS compression and sparse space savings
   --timestomp              Detect timestamp anomalies and timestomping signatures
+  --type-mismatch          Detect file extension spoofing and masquerading executables
+  --ls <dir_FRN>           List directory index contents and carved slack from $INDEX_ROOT
   --watch                  Live monitor real-time volume changes via USN Journal
   --top [N]                List top N largest files (default: 20)
   --du [N]                 Analyze top directory disk consumption (default: 20)
@@ -112,6 +116,12 @@ mftscan D: --compression
 
 # Detect timestomping and timestamp manipulation
 mftscan D: --timestomp
+
+# Detect file extension spoofing and masquerading executables
+mftscan D: --type-mismatch
+
+# List root directory directly from raw $INDEX_ROOT B-Tree and carve slack
+mftscan D: --ls 5
 
 # Live watch filesystem change events on volume D:
 mftscan D: --watch

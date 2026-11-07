@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2026-11-07
 
 ### Added
+- NTFS directory index B-Tree walker and slack carver (`IndexParser`): traverses `$INDEX_ROOT` (0x90) and `$INDEX_ALLOCATION` (0xA0) nodes to list directory contents directly from raw filesystem B-Tree structures (`--ls <dir_FRN>`), and carves residual deleted index entries from unallocated index block slack space.
+- File signature and extension spoofing detector (`SignatureVerifier`): inspects resident and non-resident magic byte signatures (`MZ`, `%PDF`, `PK`, `7z`, `Rar!`, `PNG`, `JPEG`, `GIF`, `BMP`, `GZIP`, `SQLite`, `ELF`) to detect disguised executables and mismatched extensions (`--type-mismatch`), flagging high-risk PE binaries masquerading as documents or images.
 - Anti-forensics and timestomping detector (`TimestompDetector`): cross-checks `$STANDARD_INFORMATION` and `$FILE_NAME` timestamps to expose deliberate timestamp tampering (`--timestomp`), identifying SI creation earlier than FN creation, SI modification earlier than FN creation, nanosecond zeroing artifacts from command-line modification tools, future timestamps, and pre-1980 values.
 - Low-level MFT record inspector (`RecordInspector`): decodes all resident and non-resident record attributes, validates Update Sequence Array fixups, parses attribute headers, and generates formatted 16-byte aligned hexadecimal and ASCII dumps (`--inspect <FRN>`).
 - Interactive TUI details modal: view complete record metadata, fragmentation count, cluster slack space, Alternate Data Streams, and NTFS flags directly inside the fullscreen terminal viewer by pressing `Enter`.

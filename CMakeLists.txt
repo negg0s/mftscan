@@ -53,6 +53,7 @@ add_library(mftscan_core STATIC
     include/mftscan/duplicate_detector.hpp
     include/mftscan/formatter.hpp
     include/mftscan/fragmentation_analyzer.hpp
+    include/mftscan/index_parser.hpp
     include/mftscan/inspector.hpp
     include/mftscan/ntfs_defs.hpp
     include/mftscan/path_builder.hpp
@@ -61,6 +62,7 @@ add_library(mftscan_core STATIC
     include/mftscan/raw_streamer.hpp
     include/mftscan/record_parser.hpp
     include/mftscan/scanner.hpp
+    include/mftscan/signature_verifier.hpp
     include/mftscan/sparse_slack_analyzer.hpp
     include/mftscan/thread_pool.hpp
     include/mftscan/timestomp.hpp
@@ -72,6 +74,7 @@ add_library(mftscan_core STATIC
     src/duplicate_detector.cpp
     src/formatter.cpp
     src/fragmentation_analyzer.cpp
+    src/index_parser.cpp
     src/inspector.cpp
     src/path_builder.cpp
     src/privileges.cpp
@@ -79,6 +82,7 @@ add_library(mftscan_core STATIC
     src/raw_streamer.cpp
     src/record_parser.cpp
     src/scanner.cpp
+    src/signature_verifier.cpp
     src/sparse_slack_analyzer.cpp
     src/thread_pool.cpp
     src/timestomp.cpp

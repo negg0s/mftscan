@@ -164,11 +164,25 @@ std::optional<RecordInfo> RecordParser::parse_record(
                 info.is_sparse = (attr->flags & 0x8000) != 0 || (info.attributes & FILE_ATTRIBUTE_SPARSE_FILE) != 0;
 
                 if (attr->non_resident_flag == 0) {
+                    info.is_resident = true;
                     info.size_bytes = attr->resident.value_length;
                     info.allocated_bytes = 0; // Resident within MFT record
                     info.slack_bytes = 0;
                     info.fragment_count = 0;
+
+                    if (attr->resident.value_length > 0 &&
+                        attr->resident.value_offset + attr->resident.value_length <= attr->record_length) {
+                        const uint32_t val_off = offset + attr->resident.value_offset;
+                        if (val_off + attr->resident.value_length <= record_size) {
+                            const size_t copy_bytes = (std::min)(size_t{16}, static_cast<size_t>(attr->resident.value_length));
+                            info.resident_magic.assign(
+                                record.data() + val_off,
+                                record.data() + val_off + copy_bytes
+                            );
+                        }
+                    }
                 } else {
+                    info.is_resident = false;
                     info.size_bytes = attr->non_resident.real_size;
                     info.allocated_bytes = attr->non_resident.allocated_size;
                     if (info.allocated_bytes > info.size_bytes) {
