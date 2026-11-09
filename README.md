@@ -1,5 +1,10 @@
 # mftscan
 
+[![CI](https://github.com/negg0s/mftscan/actions/workflows/ci.yml/badge.svg)](https://github.com/negg0s/mftscan/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform: Windows x64](https://img.shields.io/badge/Platform-Windows%20x64-0078D6.svg)](https://microsoft.com)
+[![Language: C++20](https://img.shields.io/badge/Language-C%2B%2B20-00599C.svg)](https://isocpp.org)
+
 Fast NTFS Master File Table ($MFT) scanner and disk analyzer CLI for Windows.
 
 Written in modern C++20 and pure Win32 API. Zero external dependencies, static CRT (`/MT`), self-contained single binary.
