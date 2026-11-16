@@ -70,6 +70,9 @@ std::vector<DataRunExtent> DataRunDecoder::decode_mapping_pairs(
         }
 
         extents.push_back(extent);
+        if (UINT64_MAX - current_vcn < run_length) {
+            break;
+        }
         current_vcn += run_length;
     }
 
@@ -79,6 +82,9 @@ std::vector<DataRunExtent> DataRunDecoder::decode_mapping_pairs(
 uint64_t DataRunDecoder::calculate_total_clusters(const std::vector<DataRunExtent>& extents) noexcept {
     uint64_t total = 0;
     for (const auto& ext : extents) {
+        if (UINT64_MAX - total < ext.cluster_count) {
+            return UINT64_MAX;
+        }
         total += ext.cluster_count;
     }
     return total;
