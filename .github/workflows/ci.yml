@@ -3,7 +3,6 @@ name: CI
 on:
   push:
     branches: [ main, master ]
-    tags: [ 'v*' ]
   pull_request:
     branches: [ main, master ]
 
@@ -64,18 +63,3 @@ jobs:
       - name: Run Tests
         if: matrix.run_tests
         run: ctest --test-dir build -C Release --output-on-failure
-
-      - name: Create release zip
-        shell: powershell
-        run: |
-          $staging = "mftscan-${{ matrix.arch }}"
-          New-Item -ItemType Directory -Path $staging
-          Copy-Item "build/Release/mftscan.exe" -Destination "$staging/mftscan.exe"
-          Copy-Item "README.md", "LICENSE", "CHANGELOG.md" -Destination $staging
-          Compress-Archive -Path "$staging/*" -DestinationPath "mftscan-${{ matrix.arch }}.zip"
-
-      - name: Upload zip artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: mftscan-${{ matrix.arch }}
-          path: mftscan-${{ matrix.arch }}.zip
